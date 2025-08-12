@@ -4,6 +4,7 @@ export interface FrontmatterRule {
     key: string;
     value: string | RegExp;
     destination: string;
+    debug?: boolean;
 }
 
 export interface SerializedFrontmatterRule {
@@ -12,6 +13,7 @@ export interface SerializedFrontmatterRule {
     destination: string;
     isRegex?: boolean;
     flags?: string;
+    debug?: boolean;
 }
 
 export function matchFrontmatter(this: { app: App }, file: TFile, rules: FrontmatterRule[]): FrontmatterRule | undefined {
@@ -42,12 +44,14 @@ export function serializeFrontmatterRules(rules: FrontmatterRule[]): SerializedF
                 destination: rule.destination,
                 isRegex: true,
                 flags: rule.value.flags,
+                debug: rule.debug,
             };
         }
         return {
             key: rule.key,
             value: rule.value,
             destination: rule.destination,
+            debug: rule.debug,
         };
     });
 }
@@ -57,6 +61,7 @@ export function deserializeFrontmatterRules(data: SerializedFrontmatterRule[] = 
         key: rule.key,
         value: rule.isRegex ? new RegExp(rule.value, rule.flags) : rule.value,
         destination: rule.destination,
+        debug: rule.debug,
     }));
 }
 
