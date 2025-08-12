@@ -6,6 +6,7 @@ import {
     TAbstractFile,
     TFile,
     normalizePath,
+    Notice,
 } from 'obsidian';
 import {
     FrontmatterRule,
@@ -50,6 +51,12 @@ export default class VaultOrganizer extends Plugin {
 
                 const newPath = normalizePath(`${rule.destination}/${file.name}`);
                 if (file.path === newPath) {
+                    return;
+                }
+
+                if (rule.debug) {
+                    const vaultName = this.app.vault.getName();
+                    new Notice(`DEBUG: ${file.basename} would be moved to ${vaultName}/${rule.destination}`);
                     return;
                 }
 
@@ -117,6 +124,14 @@ class RuleSettingTab extends PluginSettingTab {
                         rule.destination = value;
                         await this.plugin.saveData(this.plugin.settings);
                     }));
+            setting.addToggle(toggle =>
+                toggle
+                    .setTooltip('Enable debug mode')
+                    .setValue(rule.debug ?? false)
+                    .onChange(async (value) => {
+                        rule.debug = value;
+                        await this.plugin.saveData(this.plugin.settings);
+                    }));
             setting.addButton(btn =>
                 btn
                     .setButtonText('Remove')
@@ -132,7 +147,7 @@ class RuleSettingTab extends PluginSettingTab {
                 btn
                     .setButtonText('Add Rule')
                     .onClick(async () => {
-                        this.plugin.settings.rules.push({ key: '', value: '', destination: '' });
+                        this.plugin.settings.rules.push({ key: '', value: '', destination: '', debug: false });
                         await this.plugin.saveData(this.plugin.settings);
                         this.display();
                     }));

@@ -46,6 +46,8 @@ Quick starting guide for new plugin devs:
 - `npm i` or `yarn` to install dependencies.
 - `npm run dev` to start compilation in watch mode.
 
+When configuring rules in the plugin settings, each rule includes a **Debug** toggle. When enabled, the plugin will show a notification such as `DEBUG: NOTE_NAME would be moved to Vault/Folder/Subfolder` instead of moving the note.
+
 ## Manually installing the plugin
 
 - Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
