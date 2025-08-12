@@ -17,12 +17,10 @@ import {
 // Remember to rename these classes and interfaces!
 
 interface VaultOrganizerSettings {
-    mySetting: string;
     rules: SerializedFrontmatterRule[];
 }
 
 const DEFAULT_SETTINGS: VaultOrganizerSettings = {
-    mySetting: 'default',
     rules: [],
 }
 
@@ -65,7 +63,7 @@ export default class VaultOrganizer extends Plugin {
         this.registerEvent(this.app.vault.on('create', handleFileChange));
 
         // This adds a settings tab so the user can configure various aspects of the plugin
-        this.addSettingTab(new VaultOrganizerSettingTab(this.app, this));
+        this.addSettingTab(new RuleSettingTab(this.app, this));
     }
 
     onunload() {
@@ -81,7 +79,7 @@ export default class VaultOrganizer extends Plugin {
     }
 }
 
-class VaultOrganizerSettingTab extends PluginSettingTab {
+class RuleSettingTab extends PluginSettingTab {
     plugin: VaultOrganizer;
 
     constructor(app: App, plugin: VaultOrganizer) {
@@ -91,19 +89,52 @@ class VaultOrganizerSettingTab extends PluginSettingTab {
 
     display(): void {
         const { containerEl } = this;
-
         containerEl.empty();
 
-        new Setting(containerEl)
-            .setName('Setting #1')
-            .setDesc("It's a secret")
-            .addText(text =>
+        this.plugin.settings.rules.forEach((rule, index) => {
+            const setting = new Setting(containerEl).setName(`Rule ${index + 1}`);
+            setting.addText(text =>
                 text
-                    .setPlaceholder('Enter your secret')
-                    .setValue(this.plugin.settings.mySetting)
+                    .setPlaceholder('key')
+                    .setValue(rule.key)
                     .onChange(async (value) => {
-                        this.plugin.settings.mySetting = value;
-                        await this.plugin.saveSettings();
+                        rule.key = value;
+                        await this.plugin.saveData(this.plugin.settings);
+                    }));
+            setting.addText(text =>
+                text
+                    .setPlaceholder('value')
+                    .setValue(rule.value)
+                    .onChange(async (value) => {
+                        rule.value = value;
+                        await this.plugin.saveData(this.plugin.settings);
+                    }));
+            setting.addText(text =>
+                text
+                    .setPlaceholder('destination')
+                    .setValue(rule.destination)
+                    .onChange(async (value) => {
+                        rule.destination = value;
+                        await this.plugin.saveData(this.plugin.settings);
+                    }));
+            setting.addButton(btn =>
+                btn
+                    .setButtonText('Remove')
+                    .onClick(async () => {
+                        this.plugin.settings.rules.splice(index, 1);
+                        await this.plugin.saveData(this.plugin.settings);
+                        this.display();
+                    }));
+        });
+
+        new Setting(containerEl)
+            .addButton(btn =>
+                btn
+                    .setButtonText('Add Rule')
+                    .onClick(async () => {
+                        this.plugin.settings.rules.push({ key: '', value: '', destination: '' });
+                        await this.plugin.saveData(this.plugin.settings);
+                        this.display();
                     }));
     }
 }
