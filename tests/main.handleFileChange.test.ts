@@ -40,6 +40,11 @@ describe('handleFileChange', () => {
   let renameFile: jest.Mock;
   let plugin: VaultOrganizer;
   let handle: (file: any) => Promise<void>;
+  const addRuleViaSettings = async (rule: any) => {
+    plugin.settings.rules.splice(0, plugin.settings.rules.length);
+    plugin.settings.rules.push(rule);
+    await plugin.saveSettingsAndRefreshRules();
+  };
 
   beforeEach(async () => {
     metadataCache = { getFileCache: jest.fn() };
@@ -55,8 +60,9 @@ describe('handleFileChange', () => {
     (Notice as jest.Mock).mockClear();
   });
 
-  it('renames file when rule matches', async () => {
-    plugin.rules = [{ key: 'tag', value: 'journal', destination: 'Journal/' }];
+  it('renames file when rule matches after saving settings', async () => {
+    await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal/' });
+    expect((plugin as any).rules).toContainEqual(expect.objectContaining({ key: 'tag', value: 'journal', destination: 'Journal/' }));
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
     const file = new TFile('Temp/Test.md');
     await handle(file);
@@ -64,7 +70,8 @@ describe('handleFileChange', () => {
   });
 
   it('emits notice and skips rename when rule is debug', async () => {
-    plugin.rules = [{ key: 'tag', value: 'journal', destination: 'Journal', debug: true }];
+    await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal', debug: true });
+    expect((plugin as any).rules).toContainEqual(expect.objectContaining({ key: 'tag', value: 'journal', destination: 'Journal', debug: true }));
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
     const file = new TFile('Temp/Test.md');
     await handle(file);
@@ -73,7 +80,7 @@ describe('handleFileChange', () => {
   });
 
   it('ignores non-matching or same-path files', async () => {
-    plugin.rules = [{ key: 'tag', value: 'journal', destination: 'Journal' }];
+    await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
 
     metadataCache.getFileCache.mockReturnValueOnce({ frontmatter: { tag: 'note' } });
     await handle(new TFile('Temp/Test.md'));
