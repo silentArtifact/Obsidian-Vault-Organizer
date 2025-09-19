@@ -1,4 +1,9 @@
-import { serializeFrontmatterRules, deserializeFrontmatterRules, FrontmatterRule } from '../src/rules';
+import {
+  serializeFrontmatterRules,
+  deserializeFrontmatterRules,
+  FrontmatterRule,
+  SerializedFrontmatterRule
+} from '../src/rules';
 
 describe('Frontmatter rule serialization', () => {
   it('round-trips plain string rules', () => {
@@ -30,5 +35,19 @@ describe('Frontmatter rule serialization', () => {
     ];
     const result = deserializeFrontmatterRules(serializeFrontmatterRules(rules));
     expect(result[0].debug).toBe(true);
+  });
+
+  it('ignores malformed regex data during deserialization', () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const malformed: SerializedFrontmatterRule[] = [
+        { key: 'tag', value: '\\', destination: 'Journal', isRegex: true }
+      ];
+      const result = deserializeFrontmatterRules(malformed);
+      expect(result).toHaveLength(0);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to deserialize regex'));
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });
