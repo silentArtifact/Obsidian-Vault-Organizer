@@ -62,11 +62,34 @@ export function serializeFrontmatterRules(rules: FrontmatterRule[]): SerializedF
 }
 
 export function deserializeFrontmatterRules(data: SerializedFrontmatterRule[] = []): FrontmatterRule[] {
-    return data.map(rule => ({
-        key: rule.key,
-        value: rule.isRegex ? new RegExp(rule.value, rule.flags) : rule.value,
-        destination: rule.destination,
-        debug: rule.debug,
-    }));
+    const rules: FrontmatterRule[] = [];
+
+    for (const rule of data) {
+        if (rule.isRegex) {
+            try {
+                const regex = new RegExp(rule.value, rule.flags);
+                rules.push({
+                    key: rule.key,
+                    value: regex,
+                    destination: rule.destination,
+                    debug: rule.debug,
+                });
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                const destinationInfo = rule.destination ? ` (destination: "${rule.destination}")` : '';
+                const warningMessage = `[Obsidian Vault Organizer] Failed to deserialize regex for frontmatter rule "${rule.key}"${destinationInfo}: ${message}. Rule will be ignored.`;
+                console.warn(warningMessage);
+            }
+        } else {
+            rules.push({
+                key: rule.key,
+                value: rule.value,
+                destination: rule.destination,
+                debug: rule.debug,
+            });
+        }
+    }
+
+    return rules;
 }
 
