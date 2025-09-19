@@ -27,11 +27,16 @@ export function matchFrontmatter(this: { app: App }, file: TFile, rules: Frontma
         if (value === undefined || value === null) {
             return false;
         }
-        const valueStr = String(value);
-        if (rule.value instanceof RegExp) {
-            return rule.value.test(valueStr);
-        }
-        return valueStr === rule.value;
+
+        const values = Array.isArray(value) ? value : [value];
+
+        return values.some(item => {
+            const valueStr = String(item);
+            if (rule.value instanceof RegExp) {
+                return rule.value.test(valueStr);
+            }
+            return valueStr === rule.value;
+        });
     });
 }
 

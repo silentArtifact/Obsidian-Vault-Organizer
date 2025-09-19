@@ -53,4 +53,31 @@ describe('matchFrontmatter', () => {
     const result = matchFrontmatter.call({ app }, file, rules);
     expect(result).toEqual(rules[1]);
   });
+
+  it('matches when frontmatter values are arrays of strings', () => {
+    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tags: ['work', 'journal'] } });
+    const rules: FrontmatterRule[] = [
+      { key: 'tags', value: 'journal', destination: 'Journal Folder' }
+    ];
+    const result = matchFrontmatter.call({ app }, file, rules);
+    expect(result).toEqual(rules[0]);
+  });
+
+  it('matches when array values include mixed scalar types', () => {
+    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tags: ['daily', 42, true] } });
+    const rules: FrontmatterRule[] = [
+      { key: 'tags', value: '42', destination: 'Numbers' }
+    ];
+    const result = matchFrontmatter.call({ app }, file, rules);
+    expect(result).toEqual(rules[0]);
+  });
+
+  it('matches regex rules against array elements', () => {
+    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tags: ['Work', 'Journal'] } });
+    const rules: FrontmatterRule[] = [
+      { key: 'tags', value: /journal/i, destination: 'Journal Regex' }
+    ];
+    const result = matchFrontmatter.call({ app }, file, rules);
+    expect(result).toEqual(rules[0]);
+  });
 });
