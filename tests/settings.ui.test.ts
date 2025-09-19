@@ -90,30 +90,36 @@ describe('settings UI', () => {
     await fireEvent.click(screen.getByText('Add Rule'));
     expect(plugin.saveData).toHaveBeenCalledTimes(1);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '', destination: '', debug: false }] });
+    expect((plugin as any).rules).toEqual([{ key: '', value: '', destination: '', debug: false }]);
 
-    const keyInput = screen.getByPlaceholderText('key') as HTMLInputElement;
+    const keyInput = await screen.findByPlaceholderText('key') as HTMLInputElement;
     await fireEvent.input(keyInput, { target: { value: 'tag' } });
     expect(plugin.saveData).toHaveBeenCalledTimes(2);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: '', destination: '', debug: false }] });
+    expect((plugin as any).rules).toEqual([{ key: 'tag', value: '', destination: '', debug: false }]);
 
-    const valueInput = screen.getByPlaceholderText('value') as HTMLInputElement;
+    const valueInput = await screen.findByPlaceholderText('value') as HTMLInputElement;
     await fireEvent.input(valueInput, { target: { value: 'journal' } });
     expect(plugin.saveData).toHaveBeenCalledTimes(3);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: '', debug: false }] });
+    expect((plugin as any).rules).toEqual([{ key: 'tag', value: 'journal', destination: '', debug: false }]);
 
-    const destInput = screen.getByPlaceholderText('destination') as HTMLInputElement;
+    const destInput = await screen.findByPlaceholderText('destination') as HTMLInputElement;
     await fireEvent.input(destInput, { target: { value: 'Journal' } });
     expect(plugin.saveData).toHaveBeenCalledTimes(4);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', debug: false }] });
+    expect((plugin as any).rules).toEqual([{ key: 'tag', value: 'journal', destination: 'Journal', debug: false }]);
 
-    const toggle = screen.getByRole('checkbox') as HTMLInputElement;
+    const toggle = await screen.findByRole('checkbox') as HTMLInputElement;
     await fireEvent.click(toggle);
     expect(plugin.saveData).toHaveBeenCalledTimes(5);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', debug: true }] });
+    expect((plugin as any).rules).toEqual([{ key: 'tag', value: 'journal', destination: 'Journal', debug: true }]);
 
     await fireEvent.click(screen.getByText('Remove'));
     expect(plugin.saveData).toHaveBeenCalledTimes(6);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [] });
+    expect((plugin as any).rules).toEqual([]);
   });
 });
 

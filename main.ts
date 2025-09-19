@@ -31,7 +31,7 @@ export default class VaultOrganizer extends Plugin {
 
     async onload() {
         await this.loadSettings();
-        this.rules = deserializeFrontmatterRules(this.settings.rules);
+        this.updateRulesFromSettings();
 
         const handleFileChange = async (file: TAbstractFile) => {
             if (!(file instanceof TFile) || file.extension !== 'md') {
@@ -84,6 +84,15 @@ export default class VaultOrganizer extends Plugin {
     async saveSettings() {
         await this.saveData(this.settings);
     }
+
+    updateRulesFromSettings() {
+        this.rules = deserializeFrontmatterRules(this.settings.rules);
+    }
+
+    async saveSettingsAndRefreshRules() {
+        this.updateRulesFromSettings();
+        await this.saveSettings();
+    }
 }
 
 class RuleSettingTab extends PluginSettingTab {
@@ -106,7 +115,7 @@ class RuleSettingTab extends PluginSettingTab {
                     .setValue(rule.key)
                     .onChange(async (value) => {
                         rule.key = value;
-                        await this.plugin.saveData(this.plugin.settings);
+                        await this.plugin.saveSettingsAndRefreshRules();
                     }));
             setting.addText(text =>
                 text
@@ -114,7 +123,7 @@ class RuleSettingTab extends PluginSettingTab {
                     .setValue(rule.value)
                     .onChange(async (value) => {
                         rule.value = value;
-                        await this.plugin.saveData(this.plugin.settings);
+                        await this.plugin.saveSettingsAndRefreshRules();
                     }));
             setting.addText(text =>
                 text
@@ -122,7 +131,7 @@ class RuleSettingTab extends PluginSettingTab {
                     .setValue(rule.destination)
                     .onChange(async (value) => {
                         rule.destination = value;
-                        await this.plugin.saveData(this.plugin.settings);
+                        await this.plugin.saveSettingsAndRefreshRules();
                     }));
             setting.addToggle(toggle =>
                 toggle
@@ -130,14 +139,14 @@ class RuleSettingTab extends PluginSettingTab {
                     .setValue(rule.debug ?? false)
                     .onChange(async (value) => {
                         rule.debug = value;
-                        await this.plugin.saveData(this.plugin.settings);
+                        await this.plugin.saveSettingsAndRefreshRules();
                     }));
             setting.addButton(btn =>
                 btn
                     .setButtonText('Remove')
                     .onClick(async () => {
                         this.plugin.settings.rules.splice(index, 1);
-                        await this.plugin.saveData(this.plugin.settings);
+                        await this.plugin.saveSettingsAndRefreshRules();
                         this.display();
                     }));
         });
@@ -148,7 +157,7 @@ class RuleSettingTab extends PluginSettingTab {
                     .setButtonText('Add Rule')
                     .onClick(async () => {
                         this.plugin.settings.rules.push({ key: '', value: '', destination: '', debug: false });
-                        await this.plugin.saveData(this.plugin.settings);
+                        await this.plugin.saveSettingsAndRefreshRules();
                         this.display();
                     }));
     }
