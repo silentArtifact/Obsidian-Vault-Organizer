@@ -33,6 +33,7 @@ export function matchFrontmatter(this: { app: App }, file: TFile, rules: Frontma
         return values.some(item => {
             const valueStr = String(item);
             if (rule.value instanceof RegExp) {
+                rule.value.lastIndex = 0;
                 return rule.value.test(valueStr);
             }
             return valueStr === rule.value;
