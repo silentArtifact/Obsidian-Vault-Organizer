@@ -22,6 +22,7 @@ jest.mock('obsidian', () => {
       saveData() { return Promise.resolve(); }
       addSettingTab() {}
       registerEvent() {}
+      addCommand() {}
     },
     TFile,
     normalizePath: (p: string) => require('path').posix.normalize(p.replace(/\\/g, '/')),
@@ -49,6 +50,8 @@ describe('handleFileChange', () => {
   let existingFolders: Set<string>;
   let plugin: VaultOrganizer;
   let handle: (file: any) => Promise<void>;
+  let addCommandMock: jest.Mock;
+  let registeredCommands: any[];
   const addRuleViaSettings = async (rule: any) => {
     plugin.settings.rules.splice(0, plugin.settings.rules.length);
     plugin.settings.rules.push(rule);
@@ -68,10 +71,14 @@ describe('handleFileChange', () => {
       getName: jest.fn().mockReturnValue('Vault'),
       getAbstractFileByPath,
       createFolder,
+      getMarkdownFiles: jest.fn().mockReturnValue([]),
     };
     const app = { metadataCache, fileManager: { renameFile }, vault } as any;
     plugin = new VaultOrganizer(app);
     plugin.addSettingTab = jest.fn();
+    registeredCommands = [];
+    addCommandMock = jest.fn((command) => { registeredCommands.push(command); return command; });
+    (plugin as any).addCommand = addCommandMock;
     await plugin.onload();
     (Notice as jest.Mock).mockClear();
   });
@@ -130,5 +137,18 @@ describe('handleFileChange', () => {
     const lastFolderCall = createFolder.mock.invocationCallOrder[createFolder.mock.calls.length - 1];
     const renameCallOrder = renameFile.mock.invocationCallOrder[0];
     expect(lastFolderCall).toBeLessThan(renameCallOrder);
+  });
+
+  it('applies rules to existing files via command', async () => {
+    await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
+    const file = new TFile('Temp/Test.md');
+    (plugin.app.vault.getMarkdownFiles as jest.Mock).mockReturnValue([file]);
+    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
+
+    const command = registeredCommands.find(cmd => cmd.id === 'obsidian-vault-organizer-apply-rules');
+    expect(command).toBeDefined();
+    await command.callback();
+
+    expect(renameFile).toHaveBeenCalledWith(file, 'Journal/Test.md');
   });
 });
