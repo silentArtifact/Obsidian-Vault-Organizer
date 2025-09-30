@@ -30,6 +30,7 @@ jest.mock('obsidian', () => {
       containerEl.appendChild(this.settingEl);
     }
     setName(_name: string) { return this; }
+    setDesc(_desc: string) { return this; }
     addText(cb: (api: any) => void) {
       const input = document.createElement('input');
       input.type = 'text';
@@ -104,7 +105,7 @@ describe('settings UI', () => {
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: '', debug: false }] });
     expect((plugin as any).rules).toEqual([{ key: 'tag', value: 'journal', destination: '', debug: false }]);
 
-    const destInput = await screen.findByPlaceholderText('destination') as HTMLInputElement;
+    const destInput = await screen.findByPlaceholderText('destination folder (required)') as HTMLInputElement;
     await fireEvent.input(destInput, { target: { value: 'Journal' } });
     expect(plugin.saveData).toHaveBeenCalledTimes(4);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', debug: false }] });

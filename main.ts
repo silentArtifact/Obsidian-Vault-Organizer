@@ -50,15 +50,24 @@ export default class VaultOrganizer extends Plugin {
                     return;
                 }
 
-                const destinationFolder = normalizePath(rule.destination);
-                const newPath = normalizePath(`${rule.destination}/${file.name}`);
+                const trimmedDestination = rule.destination.trim();
+                if (!trimmedDestination) {
+                    if (rule.debug) {
+                        const vaultName = this.app.vault.getName();
+                        new Notice(`DEBUG: ${file.basename} would not be moved because destination is empty in ${vaultName}.`);
+                    }
+                    return;
+                }
+
+                const destinationFolder = normalizePath(trimmedDestination);
+                const newPath = normalizePath(`${trimmedDestination}/${file.name}`);
                 if (file.path === newPath) {
                     return;
                 }
 
                 if (rule.debug) {
                     const vaultName = this.app.vault.getName();
-                    new Notice(`DEBUG: ${file.basename} would be moved to ${vaultName}/${rule.destination}`);
+                    new Notice(`DEBUG: ${file.basename} would be moved to ${vaultName}/${trimmedDestination}`);
                     return;
                 }
 
@@ -133,7 +142,9 @@ class RuleSettingTab extends PluginSettingTab {
         containerEl.empty();
 
         this.plugin.settings.rules.forEach((rule, index) => {
-            const setting = new Setting(containerEl).setName(`Rule ${index + 1}`);
+            const setting = new Setting(containerEl)
+                .setName(`Rule ${index + 1}`)
+                .setDesc('Destination folder is required before the rule can move files.');
             setting.addText(text =>
                 text
                     .setPlaceholder('key')
@@ -160,7 +171,7 @@ class RuleSettingTab extends PluginSettingTab {
                     }));
             setting.addText(text =>
                 text
-                    .setPlaceholder('destination')
+                    .setPlaceholder('destination folder (required)')
                     .setValue(rule.destination)
                     .onChange(async (value) => {
                         const currentRule = this.plugin.settings.rules[index];

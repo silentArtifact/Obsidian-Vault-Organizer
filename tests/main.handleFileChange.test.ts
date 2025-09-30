@@ -27,7 +27,13 @@ jest.mock('obsidian', () => {
     normalizePath: (p: string) => require('path').posix.normalize(p.replace(/\\/g, '/')),
     Notice: noticeMock,
     PluginSettingTab: class { constructor(app: any, plugin: any) {} },
-    Setting: class {},
+    Setting: class {
+      setName() { return this; }
+      setDesc() { return this; }
+      addText() { return this; }
+      addToggle() { return this; }
+      addButton() { return this; }
+    },
     TAbstractFile: class {},
   };
 }, { virtual: true });
@@ -77,6 +83,15 @@ describe('handleFileChange', () => {
     const file = new TFile('Temp/Test.md');
     await handle(file);
     expect(renameFile).toHaveBeenCalledWith(file, 'Journal/Test.md');
+  });
+
+  it('skips rename when destination is blank', async () => {
+    await addRuleViaSettings({ key: 'tag', value: 'journal', destination: '   ' });
+    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
+    const file = new TFile('Temp/Test.md');
+    await handle(file);
+    expect(renameFile).not.toHaveBeenCalled();
+    expect(Notice).not.toHaveBeenCalled();
   });
 
   it('emits notice and skips rename when rule is debug', async () => {
