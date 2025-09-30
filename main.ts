@@ -49,6 +49,7 @@ export default class VaultOrganizer extends Plugin {
                     return;
                 }
 
+                const destinationFolder = normalizePath(rule.destination);
                 const newPath = normalizePath(`${rule.destination}/${file.name}`);
                 if (file.path === newPath) {
                     return;
@@ -60,6 +61,7 @@ export default class VaultOrganizer extends Plugin {
                     return;
                 }
 
+                await this.ensureFolderExists(destinationFolder);
                 await this.app.fileManager.renameFile(file, newPath);
             } catch (err) {
                 console.error('Failed to handle file change', err);
@@ -92,6 +94,27 @@ export default class VaultOrganizer extends Plugin {
     async saveSettingsAndRefreshRules() {
         this.updateRulesFromSettings();
         await this.saveSettings();
+    }
+
+    private async ensureFolderExists(folderPath: string): Promise<void> {
+        if (!folderPath || folderPath === '.' || folderPath === '/') {
+            return;
+        }
+
+        const segments = normalizePath(folderPath).split('/').filter(Boolean);
+        if (!segments.length) {
+            return;
+        }
+
+        let currentPath = '';
+        for (const segment of segments) {
+            currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+            if (this.app.vault.getAbstractFileByPath(currentPath)) {
+                continue;
+            }
+
+            await this.app.vault.createFolder(currentPath);
+        }
     }
 }
 

@@ -38,6 +38,9 @@ import { TFile, Notice } from 'obsidian';
 describe('handleFileChange', () => {
   let metadataCache: { getFileCache: jest.Mock };
   let renameFile: jest.Mock;
+  let createFolder: jest.Mock;
+  let getAbstractFileByPath: jest.Mock;
+  let existingFolders: Set<string>;
   let plugin: VaultOrganizer;
   let handle: (file: any) => Promise<void>;
   const addRuleViaSettings = async (rule: any) => {
@@ -49,9 +52,16 @@ describe('handleFileChange', () => {
   beforeEach(async () => {
     metadataCache = { getFileCache: jest.fn() };
     renameFile = jest.fn().mockResolvedValue(undefined);
+    existingFolders = new Set<string>();
+    getAbstractFileByPath = jest.fn((path: string) => existingFolders.has(path) ? ({ path }) : null);
+    createFolder = jest.fn(async (path: string) => {
+      existingFolders.add(path);
+    });
     const vault = {
       on: jest.fn((_: string, cb: any) => { handle = cb; }),
       getName: jest.fn().mockReturnValue('Vault'),
+      getAbstractFileByPath,
+      createFolder,
     };
     const app = { metadataCache, fileManager: { renameFile }, vault } as any;
     plugin = new VaultOrganizer(app);
@@ -90,5 +100,20 @@ describe('handleFileChange', () => {
 
     expect(renameFile).not.toHaveBeenCalled();
     expect(Notice).not.toHaveBeenCalled();
+  });
+
+  it('creates missing destination folders before renaming', async () => {
+    await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal/2023' });
+    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
+    const file = new TFile('Temp/Test.md');
+
+    await handle(file);
+
+    expect(createFolder).toHaveBeenCalledWith('Journal');
+    expect(createFolder).toHaveBeenCalledWith('Journal/2023');
+    expect(renameFile).toHaveBeenCalledWith(file, 'Journal/2023/Test.md');
+    const lastFolderCall = createFolder.mock.invocationCallOrder[createFolder.mock.calls.length - 1];
+    const renameCallOrder = renameFile.mock.invocationCallOrder[0];
+    expect(lastFolderCall).toBeLessThan(renameCallOrder);
   });
 });
