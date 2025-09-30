@@ -13,6 +13,7 @@ import {
     SerializedFrontmatterRule,
     deserializeFrontmatterRules,
     matchFrontmatter,
+    serializeFrontmatterRules,
 } from './src/rules';
 
 // Remember to rename these classes and interfaces!
@@ -93,6 +94,7 @@ export default class VaultOrganizer extends Plugin {
 
     async saveSettingsAndRefreshRules() {
         this.updateRulesFromSettings();
+        this.settings.rules = serializeFrontmatterRules(this.rules);
         await this.saveSettings();
     }
 
@@ -137,7 +139,11 @@ class RuleSettingTab extends PluginSettingTab {
                     .setPlaceholder('key')
                     .setValue(rule.key)
                     .onChange(async (value) => {
-                        rule.key = value;
+                        const currentRule = this.plugin.settings.rules[index];
+                        if (!currentRule) {
+                            return;
+                        }
+                        currentRule.key = value;
                         await this.plugin.saveSettingsAndRefreshRules();
                     }));
             setting.addText(text =>
@@ -145,7 +151,11 @@ class RuleSettingTab extends PluginSettingTab {
                     .setPlaceholder('value')
                     .setValue(rule.value)
                     .onChange(async (value) => {
-                        rule.value = value;
+                        const currentRule = this.plugin.settings.rules[index];
+                        if (!currentRule) {
+                            return;
+                        }
+                        currentRule.value = value;
                         await this.plugin.saveSettingsAndRefreshRules();
                     }));
             setting.addText(text =>
@@ -153,7 +163,35 @@ class RuleSettingTab extends PluginSettingTab {
                     .setPlaceholder('destination')
                     .setValue(rule.destination)
                     .onChange(async (value) => {
-                        rule.destination = value;
+                        const currentRule = this.plugin.settings.rules[index];
+                        if (!currentRule) {
+                            return;
+                        }
+                        currentRule.destination = value;
+                        await this.plugin.saveSettingsAndRefreshRules();
+                    }));
+            setting.addToggle(toggle =>
+                toggle
+                    .setTooltip('Treat value as a regular expression')
+                    .setValue(rule.isRegex ?? false)
+                    .onChange(async (value) => {
+                        const currentRule = this.plugin.settings.rules[index];
+                        if (!currentRule) {
+                            return;
+                        }
+                        currentRule.isRegex = value;
+                        await this.plugin.saveSettingsAndRefreshRules();
+                    }));
+            setting.addText(text =>
+                text
+                    .setPlaceholder('flags')
+                    .setValue(rule.flags ?? '')
+                    .onChange(async (value) => {
+                        const currentRule = this.plugin.settings.rules[index];
+                        if (!currentRule) {
+                            return;
+                        }
+                        currentRule.flags = value;
                         await this.plugin.saveSettingsAndRefreshRules();
                     }));
             setting.addToggle(toggle =>
@@ -161,7 +199,11 @@ class RuleSettingTab extends PluginSettingTab {
                     .setTooltip('Enable debug mode')
                     .setValue(rule.debug ?? false)
                     .onChange(async (value) => {
-                        rule.debug = value;
+                        const currentRule = this.plugin.settings.rules[index];
+                        if (!currentRule) {
+                            return;
+                        }
+                        currentRule.debug = value;
                         await this.plugin.saveSettingsAndRefreshRules();
                     }));
             setting.addButton(btn =>
@@ -179,7 +221,7 @@ class RuleSettingTab extends PluginSettingTab {
                 btn
                     .setButtonText('Add Rule')
                     .onClick(async () => {
-                        this.plugin.settings.rules.push({ key: '', value: '', destination: '', debug: false });
+                        this.plugin.settings.rules.push({ key: '', value: '', destination: '', isRegex: false, flags: '', debug: false });
                         await this.plugin.saveSettingsAndRefreshRules();
                         this.display();
                     }));

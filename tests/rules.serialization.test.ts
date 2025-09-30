@@ -37,6 +37,14 @@ describe('Frontmatter rule serialization', () => {
     expect(result[0].debug).toBe(true);
   });
 
+  it('retains regex metadata when round-tripping serialized data', () => {
+    const serialized: SerializedFrontmatterRule[] = [
+      { key: 'tag', value: 'journal', destination: 'Journal', isRegex: true, flags: 'i', debug: true }
+    ];
+    const result = serializeFrontmatterRules(deserializeFrontmatterRules(serialized));
+    expect(result).toEqual(serialized);
+  });
+
   it('ignores malformed regex data during deserialization', () => {
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {

@@ -47,7 +47,7 @@ jest.mock('obsidian', () => {
       input.type = 'checkbox';
       this.settingEl.appendChild(input);
       const api = {
-        setTooltip: (_: string) => api,
+        setTooltip: (t: string) => { input.title = t; return api; },
         setValue: (v: boolean) => { input.checked = v; return api; },
         onChange: (fn: (v: boolean) => void) => { input.addEventListener('change', e => fn((e.target as HTMLInputElement).checked)); return api; },
       };
@@ -110,14 +110,29 @@ describe('settings UI', () => {
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', debug: false }] });
     expect((plugin as any).rules).toEqual([{ key: 'tag', value: 'journal', destination: 'Journal', debug: false }]);
 
-    const toggle = await screen.findByRole('checkbox') as HTMLInputElement;
-    await fireEvent.click(toggle);
+    const regexToggle = (await screen.findByTitle('Treat value as a regular expression')) as HTMLInputElement;
+    await fireEvent.click(regexToggle);
     expect(plugin.saveData).toHaveBeenCalledTimes(5);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', debug: true }] });
-    expect((plugin as any).rules).toEqual([{ key: 'tag', value: 'journal', destination: 'Journal', debug: true }]);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', isRegex: true, flags: '', debug: false }] });
+    expect((plugin as any).rules).toEqual([{ key: 'tag', value: expect.any(RegExp), destination: 'Journal', debug: false }]);
+    expect(((plugin as any).rules[0].value as RegExp).source).toBe('journal');
+    expect(((plugin as any).rules[0].value as RegExp).flags).toBe('');
+
+    const flagsInput = await screen.findByPlaceholderText('flags') as HTMLInputElement;
+    await fireEvent.input(flagsInput, { target: { value: 'i' } });
+    expect(plugin.saveData).toHaveBeenCalledTimes(6);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', isRegex: true, flags: 'i', debug: false }] });
+    expect((plugin as any).rules).toEqual([{ key: 'tag', value: expect.any(RegExp), destination: 'Journal', debug: false }]);
+    expect(((plugin as any).rules[0].value as RegExp).flags).toBe('i');
+
+    const debugToggle = (await screen.findByTitle('Enable debug mode')) as HTMLInputElement;
+    await fireEvent.click(debugToggle);
+    expect(plugin.saveData).toHaveBeenCalledTimes(7);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', isRegex: true, flags: 'i', debug: true }] });
+    expect((plugin as any).rules).toEqual([{ key: 'tag', value: expect.any(RegExp), destination: 'Journal', debug: true }]);
 
     await fireEvent.click(screen.getByText('Remove'));
-    expect(plugin.saveData).toHaveBeenCalledTimes(6);
+    expect(plugin.saveData).toHaveBeenCalledTimes(8);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [] });
     expect((plugin as any).rules).toEqual([]);
   });
