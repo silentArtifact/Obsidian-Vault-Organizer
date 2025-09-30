@@ -39,47 +39,19 @@ export default class VaultOrganizer extends Plugin {
                 return;
             }
 
-            try {
-                const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
-                if (!frontmatter) {
-                    return;
-                }
-
-                const rule = matchFrontmatter.call(this, file, this.rules);
-                if (!rule) {
-                    return;
-                }
-
-                const trimmedDestination = rule.destination.trim();
-                if (!trimmedDestination) {
-                    if (rule.debug) {
-                        const vaultName = this.app.vault.getName();
-                        new Notice(`DEBUG: ${file.basename} would not be moved because destination is empty in ${vaultName}.`);
-                    }
-                    return;
-                }
-
-                const destinationFolder = normalizePath(trimmedDestination);
-                const newPath = normalizePath(`${trimmedDestination}/${file.name}`);
-                if (file.path === newPath) {
-                    return;
-                }
-
-                if (rule.debug) {
-                    const vaultName = this.app.vault.getName();
-                    new Notice(`DEBUG: ${file.basename} would be moved to ${vaultName}/${trimmedDestination}`);
-                    return;
-                }
-
-                await this.ensureFolderExists(destinationFolder);
-                await this.app.fileManager.renameFile(file, newPath);
-            } catch (err) {
-                console.error('Failed to handle file change', err);
-            }
+            await this.applyRulesToFile(file);
         };
 
         this.registerEvent(this.app.vault.on('modify', handleFileChange));
         this.registerEvent(this.app.vault.on('create', handleFileChange));
+
+        this.addCommand({
+            id: 'obsidian-vault-organizer-apply-rules',
+            name: 'Reorganize notes based on frontmatter rules',
+            callback: async () => {
+                await this.reorganizeAllMarkdownFiles();
+            },
+        });
 
         // This adds a settings tab so the user can configure various aspects of the plugin
         this.addSettingTab(new RuleSettingTab(this.app, this));
@@ -105,6 +77,7 @@ export default class VaultOrganizer extends Plugin {
         this.updateRulesFromSettings();
         this.settings.rules = serializeFrontmatterRules(this.rules);
         await this.saveSettings();
+        await this.reorganizeAllMarkdownFiles();
     }
 
     private async ensureFolderExists(folderPath: string): Promise<void> {
@@ -125,6 +98,57 @@ export default class VaultOrganizer extends Plugin {
             }
 
             await this.app.vault.createFolder(currentPath);
+        }
+    }
+
+    private async applyRulesToFile(file: TFile): Promise<void> {
+        try {
+            const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+            if (!frontmatter) {
+                return;
+            }
+
+            const rule = matchFrontmatter.call(this, file, this.rules);
+            if (!rule) {
+                return;
+            }
+
+            const trimmedDestination = rule.destination.trim();
+            if (!trimmedDestination) {
+                if (rule.debug) {
+                    const vaultName = this.app.vault.getName();
+                    new Notice(`DEBUG: ${file.basename} would not be moved because destination is empty in ${vaultName}.`);
+                }
+                return;
+            }
+
+            const destinationFolder = normalizePath(trimmedDestination);
+            const newPath = normalizePath(`${trimmedDestination}/${file.name}`);
+            if (file.path === newPath) {
+                return;
+            }
+
+            if (rule.debug) {
+                const vaultName = this.app.vault.getName();
+                new Notice(`DEBUG: ${file.basename} would be moved to ${vaultName}/${trimmedDestination}`);
+                return;
+            }
+
+            await this.ensureFolderExists(destinationFolder);
+            await this.app.fileManager.renameFile(file, newPath);
+        } catch (err) {
+            console.error('Failed to handle file change', err);
+        }
+    }
+
+    private async reorganizeAllMarkdownFiles(): Promise<void> {
+        const markdownFiles = this.app.vault.getMarkdownFiles?.();
+        if (!markdownFiles?.length) {
+            return;
+        }
+
+        for (const file of markdownFiles) {
+            await this.applyRulesToFile(file);
         }
     }
 }

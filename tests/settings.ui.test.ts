@@ -12,6 +12,7 @@ jest.mock('obsidian', () => {
     saveData(_data: any) { return Promise.resolve(); }
     addSettingTab(_tab: any) {}
     registerEvent() {}
+    addCommand() {}
   }
 
   class PluginSettingTab {
