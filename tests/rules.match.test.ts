@@ -80,4 +80,23 @@ describe('matchFrontmatter', () => {
     const result = matchFrontmatter.call({ app }, file, rules);
     expect(result).toEqual(rules[0]);
   });
+
+  it('resets global regex rules between different notes', () => {
+    const rules: FrontmatterRule[] = [
+      { key: 'tag', value: /journal/g, destination: 'Journal Global' }
+    ];
+
+    const fileA = { path: 'First.md' } as TFile;
+    const fileB = { path: 'Second.md' } as TFile;
+
+    metadataCache.getFileCache
+      .mockReturnValueOnce({ frontmatter: { tag: 'journal' } })
+      .mockReturnValueOnce({ frontmatter: { tag: 'journal' } });
+
+    const firstResult = matchFrontmatter.call({ app }, fileA, rules);
+    const secondResult = matchFrontmatter.call({ app }, fileB, rules);
+
+    expect(firstResult).toEqual(rules[0]);
+    expect(secondResult).toEqual(rules[0]);
+  });
 });
