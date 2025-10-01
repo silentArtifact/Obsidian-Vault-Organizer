@@ -127,7 +127,11 @@ describe('settings UI', () => {
   beforeEach(async () => {
     jest.useFakeTimers();
     (Notice as jest.Mock).mockClear();
-    const app = { metadataCache: {}, fileManager: {}, vault: { on: jest.fn() } } as any;
+    const app = {
+      metadataCache: { on: jest.fn().mockReturnValue({}), getFileCache: jest.fn() },
+      fileManager: {},
+      vault: { on: jest.fn() },
+    } as any;
     plugin = new VaultOrganizer(app);
     plugin.saveData = jest.fn().mockResolvedValue(undefined);
     reorganizeSpy = jest
