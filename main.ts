@@ -12,6 +12,7 @@ import {
     FrontmatterRule,
     SerializedFrontmatterRule,
     deserializeFrontmatterRules,
+    FrontmatterRuleDeserializationError,
     matchFrontmatter,
     serializeFrontmatterRules,
 } from './src/rules';
@@ -29,6 +30,8 @@ const DEFAULT_SETTINGS: VaultOrganizerSettings = {
 export default class VaultOrganizer extends Plugin {
     settings: VaultOrganizerSettings;
     private rules: FrontmatterRule[] = [];
+    private ruleParseErrors: FrontmatterRuleDeserializationError[] = [];
+    private ruleSettingTab?: RuleSettingTab;
 
     async onload() {
         await this.loadSettings();
@@ -54,7 +57,8 @@ export default class VaultOrganizer extends Plugin {
         });
 
         // This adds a settings tab so the user can configure various aspects of the plugin
-        this.addSettingTab(new RuleSettingTab(this.app, this));
+        this.ruleSettingTab = new RuleSettingTab(this.app, this);
+        this.addSettingTab(this.ruleSettingTab);
     }
 
     onunload() {
@@ -62,7 +66,15 @@ export default class VaultOrganizer extends Plugin {
     }
 
     async loadSettings() {
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        const loaded = await this.loadData();
+        const rules = Array.isArray(loaded?.rules)
+            ? [...loaded.rules]
+            : [];
+        this.settings = {
+            ...DEFAULT_SETTINGS,
+            ...loaded,
+            rules,
+        };
     }
 
     async saveSettings() {
@@ -70,14 +82,34 @@ export default class VaultOrganizer extends Plugin {
     }
 
     updateRulesFromSettings() {
-        this.rules = deserializeFrontmatterRules(this.settings.rules);
+        const { rules, successes, errors } = deserializeFrontmatterRules(this.settings.rules);
+        this.rules = rules;
+        this.ruleParseErrors = errors;
+        return { successes, errors };
     }
 
     async saveSettingsAndRefreshRules() {
-        this.updateRulesFromSettings();
-        this.settings.rules = serializeFrontmatterRules(this.rules);
+        const { successes, errors } = this.updateRulesFromSettings();
+        const serializedRules = serializeFrontmatterRules(successes.map(success => success.rule));
+        const nextRules = [...this.settings.rules];
+        successes.forEach((success, index) => {
+            nextRules[success.index] = serializedRules[index];
+        });
+        this.settings.rules = nextRules;
         await this.saveSettings();
+        if (errors.length) {
+            errors.forEach(error => {
+                const ruleKey = error.rule.key || '(unnamed rule)';
+                const noticeMessage = `Failed to parse regular expression for rule "${ruleKey}": ${error.message}`;
+                new Notice(noticeMessage);
+            });
+        }
+        this.ruleSettingTab?.refreshWarnings();
         await this.reorganizeAllMarkdownFiles();
+    }
+
+    getRuleErrorForIndex(index: number): FrontmatterRuleDeserializationError | undefined {
+        return this.ruleParseErrors.find(error => error.index === index);
     }
 
     private async ensureFolderExists(folderPath: string): Promise<void> {
@@ -169,6 +201,25 @@ class RuleSettingTab extends PluginSettingTab {
             const setting = new Setting(containerEl)
                 .setName(`Rule ${index + 1}`)
                 .setDesc('Destination folder is required before the rule can move files.');
+            setting.settingEl.classList.add('setting-item');
+            const warningEl = document.createElement('div');
+            warningEl.classList.add('vault-organizer-rule-warning');
+            warningEl.style.display = 'none';
+            setting.settingEl.appendChild(warningEl);
+
+            const refreshWarning = () => {
+                const error = this.plugin.getRuleErrorForIndex(index);
+                if (error) {
+                    setting.settingEl.classList.add('vault-organizer-rule-error');
+                    warningEl.textContent = `Invalid regular expression: ${error.message}`;
+                    warningEl.style.display = '';
+                } else {
+                    setting.settingEl.classList.remove('vault-organizer-rule-error');
+                    warningEl.textContent = '';
+                    warningEl.style.display = 'none';
+                }
+            };
+
             setting.addText(text =>
                 text
                     .setPlaceholder('key')
@@ -180,6 +231,7 @@ class RuleSettingTab extends PluginSettingTab {
                         }
                         currentRule.key = value;
                         await this.plugin.saveSettingsAndRefreshRules();
+                        refreshWarning();
                     }));
             setting.addText(text =>
                 text
@@ -192,6 +244,7 @@ class RuleSettingTab extends PluginSettingTab {
                         }
                         currentRule.value = value;
                         await this.plugin.saveSettingsAndRefreshRules();
+                        refreshWarning();
                     }));
             setting.addText(text =>
                 text
@@ -204,6 +257,7 @@ class RuleSettingTab extends PluginSettingTab {
                         }
                         currentRule.destination = value;
                         await this.plugin.saveSettingsAndRefreshRules();
+                        refreshWarning();
                     }));
             setting.addToggle(toggle =>
                 toggle
@@ -216,6 +270,7 @@ class RuleSettingTab extends PluginSettingTab {
                         }
                         currentRule.isRegex = value;
                         await this.plugin.saveSettingsAndRefreshRules();
+                        refreshWarning();
                     }));
             setting.addText(text =>
                 text
@@ -228,6 +283,7 @@ class RuleSettingTab extends PluginSettingTab {
                         }
                         currentRule.flags = value;
                         await this.plugin.saveSettingsAndRefreshRules();
+                        refreshWarning();
                     }));
             setting.addToggle(toggle =>
                 toggle
@@ -240,6 +296,7 @@ class RuleSettingTab extends PluginSettingTab {
                         }
                         currentRule.debug = value;
                         await this.plugin.saveSettingsAndRefreshRules();
+                        refreshWarning();
                     }));
             setting.addButton(btn =>
                 btn
@@ -249,6 +306,8 @@ class RuleSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettingsAndRefreshRules();
                         this.display();
                     }));
+
+            refreshWarning();
         });
 
         new Setting(containerEl)
@@ -260,5 +319,29 @@ class RuleSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettingsAndRefreshRules();
                         this.display();
                     }));
+    }
+
+    refreshWarnings() {
+        const { containerEl } = this;
+        if (!containerEl) {
+            return;
+        }
+        const settingElements = containerEl.querySelectorAll('.setting-item');
+        settingElements.forEach((settingEl, index) => {
+            const warningEl = settingEl.querySelector('.vault-organizer-rule-warning') as HTMLElement | null;
+            if (!warningEl) {
+                return;
+            }
+            const error = this.plugin.getRuleErrorForIndex(index);
+            if (error) {
+                settingEl.classList.add('vault-organizer-rule-error');
+                warningEl.textContent = `Invalid regular expression: ${error.message}`;
+                warningEl.style.display = '';
+            } else {
+                settingEl.classList.remove('vault-organizer-rule-error');
+                warningEl.textContent = '';
+                warningEl.style.display = 'none';
+            }
+        });
     }
 }
