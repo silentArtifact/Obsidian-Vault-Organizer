@@ -12,7 +12,8 @@ describe('Frontmatter rule serialization', () => {
     ];
     const serialized = serializeFrontmatterRules(rules);
     const result = deserializeFrontmatterRules(serialized);
-    expect(result).toEqual(rules);
+    expect(result.rules).toEqual(rules);
+    expect(result.errors).toHaveLength(0);
   });
 
   it('round-trips regex rules with flags', () => {
@@ -21,8 +22,8 @@ describe('Frontmatter rule serialization', () => {
     ];
     const serialized = serializeFrontmatterRules(rules);
     const result = deserializeFrontmatterRules(serialized);
-    expect(result).toHaveLength(1);
-    const rule = result[0];
+    expect(result.rules).toHaveLength(1);
+    const rule = result.rules[0];
     expect(rule.value).toBeInstanceOf(RegExp);
     const regex = rule.value as RegExp;
     expect(regex.source).toBe('journal');
@@ -34,14 +35,15 @@ describe('Frontmatter rule serialization', () => {
       { key: 'tag', value: 'journal', destination: 'Journal', debug: true }
     ];
     const result = deserializeFrontmatterRules(serializeFrontmatterRules(rules));
-    expect(result[0].debug).toBe(true);
+    expect(result.rules[0].debug).toBe(true);
   });
 
   it('retains regex metadata when round-tripping serialized data', () => {
     const serialized: SerializedFrontmatterRule[] = [
       { key: 'tag', value: 'journal', destination: 'Journal', isRegex: true, flags: 'i', debug: true }
     ];
-    const result = serializeFrontmatterRules(deserializeFrontmatterRules(serialized));
+    const deserialized = deserializeFrontmatterRules(serialized);
+    const result = serializeFrontmatterRules(deserialized.rules);
     expect(result).toEqual(serialized);
   });
 
@@ -52,7 +54,10 @@ describe('Frontmatter rule serialization', () => {
         { key: 'tag', value: '\\', destination: 'Journal', isRegex: true }
       ];
       const result = deserializeFrontmatterRules(malformed);
-      expect(result).toHaveLength(0);
+      expect(result.rules).toHaveLength(0);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].rule).toEqual(malformed[0]);
+      expect(result.errors[0].message).toBeDefined();
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to deserialize regex'));
     } finally {
       warnSpy.mockRestore();

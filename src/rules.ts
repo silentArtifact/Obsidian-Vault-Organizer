@@ -62,35 +62,65 @@ export function serializeFrontmatterRules(rules: FrontmatterRule[]): SerializedF
     });
 }
 
-export function deserializeFrontmatterRules(data: SerializedFrontmatterRule[] = []): FrontmatterRule[] {
-    const rules: FrontmatterRule[] = [];
+export interface FrontmatterRuleDeserializationSuccess {
+    index: number;
+    rule: FrontmatterRule;
+}
 
-    for (const rule of data) {
+export interface FrontmatterRuleDeserializationError {
+    index: number;
+    message: string;
+    rule: SerializedFrontmatterRule;
+    cause: unknown;
+}
+
+export interface FrontmatterRuleDeserializationResult {
+    rules: FrontmatterRule[];
+    successes: FrontmatterRuleDeserializationSuccess[];
+    errors: FrontmatterRuleDeserializationError[];
+}
+
+export function deserializeFrontmatterRules(data: SerializedFrontmatterRule[] = []): FrontmatterRuleDeserializationResult {
+    const rules: FrontmatterRule[] = [];
+    const successes: FrontmatterRuleDeserializationSuccess[] = [];
+    const errors: FrontmatterRuleDeserializationError[] = [];
+
+    data.forEach((rule, index) => {
         if (rule.isRegex) {
             try {
                 const regex = new RegExp(rule.value, rule.flags);
-                rules.push({
+                const parsedRule: FrontmatterRule = {
                     key: rule.key,
                     value: regex,
                     destination: rule.destination,
                     debug: rule.debug,
-                });
+                };
+                rules.push(parsedRule);
+                successes.push({ index, rule: parsedRule });
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 const destinationInfo = rule.destination ? ` (destination: "${rule.destination}")` : '';
                 const warningMessage = `[Obsidian Vault Organizer] Failed to deserialize regex for frontmatter rule "${rule.key}"${destinationInfo}: ${message}. Rule will be ignored.`;
                 console.warn(warningMessage);
+                errors.push({
+                    index,
+                    message,
+                    rule: { ...rule },
+                    cause: error,
+                });
             }
         } else {
-            rules.push({
+            const parsedRule: FrontmatterRule = {
                 key: rule.key,
                 value: rule.value,
                 destination: rule.destination,
                 debug: rule.debug,
-            });
+            };
+            rules.push(parsedRule);
+            successes.push({ index, rule: parsedRule });
         }
-    }
+    });
 
-    return rules;
+    return { rules, successes, errors };
 }
 

@@ -28,6 +28,7 @@ jest.mock('obsidian', () => {
     settingEl: HTMLDivElement;
     constructor(containerEl: HTMLElement) {
       this.settingEl = document.createElement('div');
+      this.settingEl.classList.add('setting-item');
       containerEl.appendChild(this.settingEl);
     }
     setName(_name: string) { return this; }
@@ -68,17 +69,24 @@ jest.mock('obsidian', () => {
     }
   }
 
-  return { Plugin, PluginSettingTab, Setting };
+  const Notice = jest.fn().mockImplementation(function (this: any, message: string) {
+    this.message = message;
+  });
+
+  return { Plugin, PluginSettingTab, Setting, Notice };
 }, { virtual: true });
 
 import VaultOrganizer from '../main';
 import { screen, fireEvent } from '@testing-library/dom';
+
+const { Notice } = jest.requireMock('obsidian');
 
 describe('settings UI', () => {
   let plugin: VaultOrganizer;
   let tab: any;
 
   beforeEach(async () => {
+    (Notice as jest.Mock).mockClear();
     const app = { metadataCache: {}, fileManager: {}, vault: { on: jest.fn() } } as any;
     plugin = new VaultOrganizer(app);
     plugin.saveData = jest.fn().mockResolvedValue(undefined);
@@ -86,6 +94,10 @@ describe('settings UI', () => {
     await plugin.onload();
     tab = (plugin.addSettingTab as jest.Mock).mock.calls[0][0];
     tab.display();
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
   });
 
   it('persists updated rules on UI interactions', async () => {
@@ -137,6 +149,23 @@ describe('settings UI', () => {
     expect(plugin.saveData).toHaveBeenCalledTimes(8);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [] });
     expect((plugin as any).rules).toEqual([]);
+    expect((Notice as jest.Mock)).not.toHaveBeenCalled();
+  });
+
+  it('shows warnings for invalid regex values and keeps entries editable', async () => {
+    await fireEvent.click(screen.getByText('Add Rule'));
+    const regexToggle = (await screen.findByTitle('Treat value as a regular expression')) as HTMLInputElement;
+    await fireEvent.click(regexToggle);
+    const valueInput = await screen.findByPlaceholderText('value') as HTMLInputElement;
+    await fireEvent.input(valueInput, { target: { value: '\\' } });
+
+    const warning = await screen.findByText(/invalid regular expression/i);
+    expect(warning.textContent).toMatch(/invalid regular expression/i);
+    expect((Notice as jest.Mock)).toHaveBeenCalledWith(expect.stringContaining('Failed to parse regular expression'));
+    expect(plugin.getRuleErrorForIndex(0)).toBeDefined();
+    expect(plugin.settings.rules[0]).toEqual({ key: '', value: '\\', destination: '', isRegex: true, flags: '', debug: false });
+    expect((plugin as any).rules).toEqual([]);
+    expect(regexToggle.checked).toBe(true);
   });
 });
 
