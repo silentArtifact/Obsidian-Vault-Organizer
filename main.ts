@@ -48,6 +48,13 @@ export default class VaultOrganizer extends Plugin {
 
         this.registerEvent(this.app.vault.on('modify', handleFileChange));
         this.registerEvent(this.app.vault.on('create', handleFileChange));
+        this.registerEvent(this.app.metadataCache.on('changed', async (file) => {
+            if (!(file instanceof TFile) || file.extension !== 'md') {
+                return;
+            }
+
+            await this.applyRulesToFile(file);
+        }));
 
         this.addCommand({
             id: 'obsidian-vault-organizer-apply-rules',

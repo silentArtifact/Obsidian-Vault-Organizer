@@ -78,7 +78,7 @@ import VaultOrganizer from '../main';
 import { TFile, Notice } from 'obsidian';
 
 describe('handleFileChange', () => {
-  let metadataCache: { getFileCache: jest.Mock };
+  let metadataCache: { getFileCache: jest.Mock; on: jest.Mock };
   let renameFile: jest.Mock;
   let createFolder: jest.Mock;
   let getAbstractFileByPath: jest.Mock;
@@ -87,6 +87,7 @@ describe('handleFileChange', () => {
   let handle: (file: any) => Promise<void>;
   let addCommandMock: jest.Mock;
   let registeredCommands: any[];
+  let metadataChangedHandler: ((file: any) => Promise<void> | void) | undefined;
   const addRuleViaSettings = async (rule: any) => {
     plugin.settings.rules.splice(0, plugin.settings.rules.length);
     plugin.settings.rules.push(rule);
@@ -94,7 +95,16 @@ describe('handleFileChange', () => {
   };
 
   beforeEach(async () => {
-    metadataCache = { getFileCache: jest.fn() };
+    metadataChangedHandler = undefined;
+    metadataCache = {
+      getFileCache: jest.fn(),
+      on: jest.fn((event: string, cb: (file: any) => Promise<void> | void) => {
+        if (event === 'changed') {
+          metadataChangedHandler = cb;
+        }
+        return {};
+      }),
+    };
     renameFile = jest.fn().mockResolvedValue(undefined);
     existingFolders = new Set<string>();
     getAbstractFileByPath = jest.fn((path: string) => existingFolders.has(path) ? ({ path }) : null);
@@ -115,6 +125,7 @@ describe('handleFileChange', () => {
     addCommandMock = jest.fn((command) => { registeredCommands.push(command); return command; });
     (plugin as any).addCommand = addCommandMock;
     await plugin.onload();
+    expect(metadataCache.on).toHaveBeenCalledWith('changed', expect.any(Function));
     (Notice as jest.Mock).mockClear();
   });
 
@@ -183,6 +194,24 @@ describe('handleFileChange', () => {
     const command = registeredCommands.find(cmd => cmd.id === 'obsidian-vault-organizer-apply-rules');
     expect(command).toBeDefined();
     await command.callback();
+
+    expect(renameFile).toHaveBeenCalledWith(file, 'Journal/Test.md');
+  });
+
+  it('applies rules after metadata cache resolves frontmatter', async () => {
+    await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
+    const file = new TFile('Temp/Test.md');
+
+    metadataCache.getFileCache
+      .mockReturnValueOnce(undefined)
+      .mockReturnValue({ frontmatter: { tag: 'journal' } });
+
+    await handle(file);
+
+    expect(renameFile).not.toHaveBeenCalled();
+    expect(metadataChangedHandler).toBeDefined();
+
+    await metadataChangedHandler?.(file);
 
     expect(renameFile).toHaveBeenCalledWith(file, 'Journal/Test.md');
   });
