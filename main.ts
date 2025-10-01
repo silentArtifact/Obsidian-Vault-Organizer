@@ -7,6 +7,7 @@ import {
     TFile,
     normalizePath,
     Notice,
+    debounce,
 } from 'obsidian';
 import {
     FrontmatterRule,
@@ -88,7 +89,7 @@ export default class VaultOrganizer extends Plugin {
         return { successes, errors };
     }
 
-    async saveSettingsAndRefreshRules() {
+    private async persistSettingsAndRefreshRules() {
         const { successes, errors } = this.updateRulesFromSettings();
         const serializedRules = serializeFrontmatterRules(successes.map(success => success.rule));
         const nextRules = [...this.settings.rules];
@@ -105,6 +106,14 @@ export default class VaultOrganizer extends Plugin {
             });
         }
         this.ruleSettingTab?.refreshWarnings();
+    }
+
+    async saveSettingsWithoutReorganizing() {
+        await this.persistSettingsAndRefreshRules();
+    }
+
+    async saveSettingsAndRefreshRules() {
+        await this.persistSettingsAndRefreshRules();
         await this.reorganizeAllMarkdownFiles();
     }
 
@@ -187,10 +196,22 @@ export default class VaultOrganizer extends Plugin {
 
 class RuleSettingTab extends PluginSettingTab {
     plugin: VaultOrganizer;
+    private debouncedSaveOnly: ReturnType<typeof debounce>;
 
     constructor(app: App, plugin: VaultOrganizer) {
         super(app, plugin);
         this.plugin = plugin;
+        this.debouncedSaveOnly = debounce(async () => {
+            await this.plugin.saveSettingsWithoutReorganizing();
+        }, 300);
+    }
+
+    private scheduleSaveOnly() {
+        this.debouncedSaveOnly();
+    }
+
+    private cancelPendingSaveOnly() {
+        this.debouncedSaveOnly.cancel();
     }
 
     display(): void {
@@ -224,40 +245,37 @@ class RuleSettingTab extends PluginSettingTab {
                 text
                     .setPlaceholder('key')
                     .setValue(rule.key)
-                    .onChange(async (value) => {
+                    .onChange((value) => {
                         const currentRule = this.plugin.settings.rules[index];
                         if (!currentRule) {
                             return;
                         }
                         currentRule.key = value;
-                        await this.plugin.saveSettingsAndRefreshRules();
-                        refreshWarning();
+                        this.scheduleSaveOnly();
                     }));
             setting.addText(text =>
                 text
                     .setPlaceholder('value')
                     .setValue(rule.value)
-                    .onChange(async (value) => {
+                    .onChange((value) => {
                         const currentRule = this.plugin.settings.rules[index];
                         if (!currentRule) {
                             return;
                         }
                         currentRule.value = value;
-                        await this.plugin.saveSettingsAndRefreshRules();
-                        refreshWarning();
+                        this.scheduleSaveOnly();
                     }));
             setting.addText(text =>
                 text
                     .setPlaceholder('destination folder (required)')
                     .setValue(rule.destination)
-                    .onChange(async (value) => {
+                    .onChange((value) => {
                         const currentRule = this.plugin.settings.rules[index];
                         if (!currentRule) {
                             return;
                         }
                         currentRule.destination = value;
-                        await this.plugin.saveSettingsAndRefreshRules();
-                        refreshWarning();
+                        this.scheduleSaveOnly();
                     }));
             setting.addToggle(toggle =>
                 toggle
@@ -269,21 +287,20 @@ class RuleSettingTab extends PluginSettingTab {
                             return;
                         }
                         currentRule.isRegex = value;
+                        this.cancelPendingSaveOnly();
                         await this.plugin.saveSettingsAndRefreshRules();
-                        refreshWarning();
                     }));
             setting.addText(text =>
                 text
                     .setPlaceholder('flags')
                     .setValue(rule.flags ?? '')
-                    .onChange(async (value) => {
+                    .onChange((value) => {
                         const currentRule = this.plugin.settings.rules[index];
                         if (!currentRule) {
                             return;
                         }
                         currentRule.flags = value;
-                        await this.plugin.saveSettingsAndRefreshRules();
-                        refreshWarning();
+                        this.scheduleSaveOnly();
                     }));
             setting.addToggle(toggle =>
                 toggle
@@ -295,15 +312,16 @@ class RuleSettingTab extends PluginSettingTab {
                             return;
                         }
                         currentRule.debug = value;
+                        this.cancelPendingSaveOnly();
                         await this.plugin.saveSettingsAndRefreshRules();
-                        refreshWarning();
                     }));
             setting.addButton(btn =>
                 btn
                     .setButtonText('Remove')
                     .onClick(async () => {
                         this.plugin.settings.rules.splice(index, 1);
-                        await this.plugin.saveSettingsAndRefreshRules();
+                        this.cancelPendingSaveOnly();
+                        await this.plugin.saveSettingsWithoutReorganizing();
                         this.display();
                     }));
 
@@ -316,8 +334,18 @@ class RuleSettingTab extends PluginSettingTab {
                     .setButtonText('Add Rule')
                     .onClick(async () => {
                         this.plugin.settings.rules.push({ key: '', value: '', destination: '', isRegex: false, flags: '', debug: false });
-                        await this.plugin.saveSettingsAndRefreshRules();
+                        this.cancelPendingSaveOnly();
+                        await this.plugin.saveSettingsWithoutReorganizing();
                         this.display();
+                    }));
+
+        new Setting(containerEl)
+            .addButton(btn =>
+                btn
+                    .setButtonText('Apply now')
+                    .onClick(async () => {
+                        this.cancelPendingSaveOnly();
+                        await this.plugin.saveSettingsAndRefreshRules();
                     }));
     }
 

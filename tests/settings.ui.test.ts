@@ -73,7 +73,41 @@ jest.mock('obsidian', () => {
     this.message = message;
   });
 
-  return { Plugin, PluginSettingTab, Setting, Notice };
+  const debounce = <T extends (...args: any[]) => any>(fn: T, timeout = 0) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastArgs: Parameters<T> | null = null;
+    const debounced: any = (...args: Parameters<T>) => {
+      lastArgs = args;
+      if (timer) {
+        clearTimeout(timer);
+      }
+      timer = setTimeout(() => {
+        timer = null;
+        lastArgs && fn(...lastArgs);
+      }, timeout);
+      return debounced;
+    };
+    debounced.cancel = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      return debounced;
+    };
+    debounced.run = () => {
+      if (timer) {
+        clearTimeout(timer);
+        const args = lastArgs;
+        timer = null;
+        if (args) {
+          return fn(...args);
+        }
+      }
+    };
+    return debounced;
+  };
+
+  return { Plugin, PluginSettingTab, Setting, Notice, debounce };
 }, { virtual: true });
 
 import VaultOrganizer from '../main';
@@ -84,12 +118,21 @@ const { Notice } = jest.requireMock('obsidian');
 describe('settings UI', () => {
   let plugin: VaultOrganizer;
   let tab: any;
+  let reorganizeSpy: jest.SpyInstance;
+  const flushPromises = async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  };
 
   beforeEach(async () => {
+    jest.useFakeTimers();
     (Notice as jest.Mock).mockClear();
     const app = { metadataCache: {}, fileManager: {}, vault: { on: jest.fn() } } as any;
     plugin = new VaultOrganizer(app);
     plugin.saveData = jest.fn().mockResolvedValue(undefined);
+    reorganizeSpy = jest
+      .spyOn(plugin as any, 'reorganizeAllMarkdownFiles')
+      .mockResolvedValue(undefined);
     plugin.addSettingTab = jest.fn();
     await plugin.onload();
     tab = (plugin.addSettingTab as jest.Mock).mock.calls[0][0];
@@ -97,59 +140,100 @@ describe('settings UI', () => {
   });
 
   afterEach(() => {
+    reorganizeSpy.mockRestore();
+    jest.useRealTimers();
     document.body.innerHTML = '';
   });
 
   it('persists updated rules on UI interactions', async () => {
     await fireEvent.click(screen.getByText('Add Rule'));
+    await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(1);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '', destination: '', debug: false }] });
     expect((plugin as any).rules).toEqual([{ key: '', value: '', destination: '', debug: false }]);
+    expect(reorganizeSpy).not.toHaveBeenCalled();
 
     const keyInput = await screen.findByPlaceholderText('key') as HTMLInputElement;
     await fireEvent.input(keyInput, { target: { value: 'tag' } });
+    await jest.runOnlyPendingTimersAsync();
+    await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(2);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: '', destination: '', debug: false }] });
     expect((plugin as any).rules).toEqual([{ key: 'tag', value: '', destination: '', debug: false }]);
+    expect(reorganizeSpy).not.toHaveBeenCalled();
 
     const valueInput = await screen.findByPlaceholderText('value') as HTMLInputElement;
     await fireEvent.input(valueInput, { target: { value: 'journal' } });
+    await jest.runOnlyPendingTimersAsync();
+    await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(3);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: '', debug: false }] });
     expect((plugin as any).rules).toEqual([{ key: 'tag', value: 'journal', destination: '', debug: false }]);
+    expect(reorganizeSpy).not.toHaveBeenCalled();
 
     const destInput = await screen.findByPlaceholderText('destination folder (required)') as HTMLInputElement;
     await fireEvent.input(destInput, { target: { value: 'Journal' } });
+    await jest.runOnlyPendingTimersAsync();
+    await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(4);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', debug: false }] });
     expect((plugin as any).rules).toEqual([{ key: 'tag', value: 'journal', destination: 'Journal', debug: false }]);
+    expect(reorganizeSpy).not.toHaveBeenCalled();
 
     const regexToggle = (await screen.findByTitle('Treat value as a regular expression')) as HTMLInputElement;
     await fireEvent.click(regexToggle);
+    await flushPromises();
     expect(plugin.saveData).toHaveBeenCalledTimes(5);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', isRegex: true, flags: '', debug: false }] });
     expect((plugin as any).rules).toEqual([{ key: 'tag', value: expect.any(RegExp), destination: 'Journal', debug: false }]);
     expect(((plugin as any).rules[0].value as RegExp).source).toBe('journal');
     expect(((plugin as any).rules[0].value as RegExp).flags).toBe('');
+    expect(reorganizeSpy).toHaveBeenCalledTimes(1);
 
     const flagsInput = await screen.findByPlaceholderText('flags') as HTMLInputElement;
     await fireEvent.input(flagsInput, { target: { value: 'i' } });
+    await jest.runOnlyPendingTimersAsync();
+    await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(6);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', isRegex: true, flags: 'i', debug: false }] });
     expect((plugin as any).rules).toEqual([{ key: 'tag', value: expect.any(RegExp), destination: 'Journal', debug: false }]);
     expect(((plugin as any).rules[0].value as RegExp).flags).toBe('i');
+    expect(reorganizeSpy).toHaveBeenCalledTimes(1);
 
     const debugToggle = (await screen.findByTitle('Enable debug mode')) as HTMLInputElement;
     await fireEvent.click(debugToggle);
+    await flushPromises();
     expect(plugin.saveData).toHaveBeenCalledTimes(7);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', isRegex: true, flags: 'i', debug: true }] });
     expect((plugin as any).rules).toEqual([{ key: 'tag', value: expect.any(RegExp), destination: 'Journal', debug: true }]);
+    expect(reorganizeSpy).toHaveBeenCalledTimes(2);
 
     await fireEvent.click(screen.getByText('Remove'));
+    await flushPromises();
     expect(plugin.saveData).toHaveBeenCalledTimes(8);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [] });
     expect((plugin as any).rules).toEqual([]);
+    expect(reorganizeSpy).toHaveBeenCalledTimes(2);
     expect((Notice as jest.Mock)).not.toHaveBeenCalled();
+  });
+
+  it('debounces text input saves and reorganizes on demand', async () => {
+    await fireEvent.click(screen.getByText('Add Rule'));
+    await Promise.resolve();
+    const keyInput = await screen.findByPlaceholderText('key') as HTMLInputElement;
+    await fireEvent.input(keyInput, { target: { value: 't' } });
+    await fireEvent.input(keyInput, { target: { value: 'ta' } });
+    await fireEvent.input(keyInput, { target: { value: 'tag' } });
+    expect(reorganizeSpy).not.toHaveBeenCalled();
+
+    await jest.runOnlyPendingTimersAsync();
+    await Promise.resolve();
+    expect(plugin.saveData).toHaveBeenCalledTimes(2);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: '', destination: '', debug: false }] });
+
+    await fireEvent.click(screen.getByText('Apply now'));
+    await flushPromises();
+    expect(reorganizeSpy).toHaveBeenCalledTimes(1);
   });
 
   it('shows warnings for invalid regex values and keeps entries editable', async () => {
@@ -158,6 +242,8 @@ describe('settings UI', () => {
     await fireEvent.click(regexToggle);
     const valueInput = await screen.findByPlaceholderText('value') as HTMLInputElement;
     await fireEvent.input(valueInput, { target: { value: '\\' } });
+    await jest.runOnlyPendingTimersAsync();
+    await Promise.resolve();
 
     const warning = await screen.findByText(/invalid regular expression/i);
     expect(warning.textContent).toMatch(/invalid regular expression/i);

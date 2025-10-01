@@ -13,6 +13,40 @@ jest.mock('obsidian', () => {
       this.extension = parts.length > 1 ? parts.pop()! : '';
     }
   }
+  const debounce = <T extends (...args: any[]) => any>(fn: T, timeout = 0) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastArgs: Parameters<T> | null = null;
+    const debounced: any = (...args: Parameters<T>) => {
+      lastArgs = args;
+      if (timer) {
+        clearTimeout(timer);
+      }
+      timer = setTimeout(() => {
+        timer = null;
+        lastArgs && fn(...lastArgs);
+      }, timeout);
+      return debounced;
+    };
+    debounced.cancel = () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      return debounced;
+    };
+    debounced.run = () => {
+      if (timer) {
+        clearTimeout(timer);
+        const args = lastArgs;
+        timer = null;
+        if (args) {
+          return fn(...args);
+        }
+      }
+    };
+    return debounced;
+  };
+
   return {
     App: class {},
     Plugin: class {
@@ -36,6 +70,7 @@ jest.mock('obsidian', () => {
       addButton() { return this; }
     },
     TAbstractFile: class {},
+    debounce,
   };
 }, { virtual: true });
 
