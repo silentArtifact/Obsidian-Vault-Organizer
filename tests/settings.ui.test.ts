@@ -42,7 +42,9 @@ jest.mock('obsidian', () => {
       const api = {
         setPlaceholder: (p: string) => { input.placeholder = p; return api; },
         setValue: (v: string) => { input.value = v; return api; },
+        getValue: () => input.value,
         onChange: (fn: (v: string) => void) => { input.addEventListener('input', e => fn((e.target as HTMLInputElement).value)); return api; },
+        inputEl: input,
       };
       cb(api);
       return this;
@@ -69,11 +71,41 @@ jest.mock('obsidian', () => {
       cb(api);
       return this;
     }
+    addExtraButton(cb: (api: any) => void) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      this.settingEl.appendChild(button);
+      const api = {
+        setIcon: (_icon: string) => api,
+        setTooltip: (t: string) => { button.title = t; return api; },
+        onClick: (fn: () => void) => { button.addEventListener('click', fn); return api; },
+        buttonEl: button,
+      };
+      cb(api);
+      return this;
+    }
   }
 
   const Notice = jest.fn().mockImplementation(function (this: any, message: string) {
     this.message = message;
   });
+
+  class FuzzySuggestModal<T> {
+    static __instances: any[] = [];
+    app: any;
+    constructor(app: any) {
+      this.app = app;
+    }
+    open() {
+      (FuzzySuggestModal as any).__instances.push(this);
+    }
+    getItems(): T[] { return [] as T[]; }
+    getItemText(item: T): string { return String(item); }
+    onChooseItem(_item: T) {}
+  }
+  (FuzzySuggestModal as any).__instances = [];
+
+  const getAllTags = jest.fn((cache: any) => cache?.tags ?? null);
 
   const debounce = <T extends (...args: any[]) => any>(fn: T, timeout = 0) => {
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -109,18 +141,21 @@ jest.mock('obsidian', () => {
     return debounced;
   };
 
-  return { Plugin, PluginSettingTab, Setting, Notice, debounce };
+  return { Plugin, PluginSettingTab, Setting, Notice, debounce, FuzzySuggestModal, getAllTags };
 }, { virtual: true });
 
 import VaultOrganizer from '../main';
 import { screen, fireEvent } from '@testing-library/dom';
 
-const { Notice } = jest.requireMock('obsidian');
+const { Notice, FuzzySuggestModal, getAllTags } = jest.requireMock('obsidian');
 
 describe('settings UI', () => {
   let plugin: VaultOrganizer;
   let tab: any;
   let reorganizeSpy: jest.SpyInstance;
+  let metadataResolvedCallback: (() => void) | undefined;
+  let fileCaches: Map<string, any>;
+  let markdownFiles: any[];
   const flushPromises = async () => {
     await Promise.resolve();
     await Promise.resolve();
@@ -129,10 +164,26 @@ describe('settings UI', () => {
   beforeEach(async () => {
     jest.useFakeTimers();
     (Notice as jest.Mock).mockClear();
+    (FuzzySuggestModal as any).__instances = [];
+    (getAllTags as jest.Mock).mockClear();
+    metadataResolvedCallback = undefined;
+    fileCaches = new Map<string, any>([
+      ['Daily.md', { tags: ['#daily', '#journal'] }],
+      ['Todos.md', { tags: ['#todo'] }],
+    ]);
+    markdownFiles = [{ path: 'Daily.md' }, { path: 'Todos.md' }];
     const app = {
-      metadataCache: { on: jest.fn().mockReturnValue({}), getFileCache: jest.fn() },
+      metadataCache: {
+        on: jest.fn((event: string, cb: any) => {
+          if (event === 'resolved') {
+            metadataResolvedCallback = cb;
+          }
+          return {};
+        }),
+        getFileCache: jest.fn((file: any) => fileCaches.get(file.path)),
+      },
       fileManager: {},
-      vault: { on: jest.fn() },
+      vault: { on: jest.fn(), getMarkdownFiles: jest.fn(() => markdownFiles) },
     } as any;
     const manifest = {
       id: 'obsidian-vault-organizer',
@@ -232,6 +283,53 @@ describe('settings UI', () => {
     expect((plugin as any).rules).toEqual([]);
     expect(reorganizeSpy).toHaveBeenCalledTimes(2);
     expect((Notice as jest.Mock)).not.toHaveBeenCalled();
+  });
+
+  it('allows selecting tags from the picker to populate the value field', async () => {
+    await fireEvent.click(screen.getByText('Add Rule'));
+    await Promise.resolve();
+
+    const valueInput = await screen.findByPlaceholderText('value') as HTMLInputElement;
+    const tagButton = screen.getByTitle('Browse tags');
+    await fireEvent.click(tagButton);
+
+    const modalInstance = (FuzzySuggestModal as any).__instances.pop();
+    expect(modalInstance).toBeDefined();
+    modalInstance.onChooseItem('#daily');
+
+    await jest.runOnlyPendingTimersAsync();
+    await Promise.resolve();
+
+    expect(valueInput.value).toBe('#daily');
+    expect(plugin.settings.rules[0]).toEqual({ key: '', value: '#daily', destination: '', debug: false });
+    expect(plugin.saveData).toHaveBeenCalledTimes(2);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '#daily', destination: '', debug: false }] });
+
+    fileCaches.set('Ideas.md', { tags: ['#ideas'] });
+    markdownFiles.push({ path: 'Ideas.md' });
+    metadataResolvedCallback?.();
+
+    await fireEvent.click(tagButton);
+    const secondModal = (FuzzySuggestModal as any).__instances.pop();
+    expect(secondModal).toBeDefined();
+    secondModal.onChooseItem('#ideas');
+    await jest.runOnlyPendingTimersAsync();
+    await Promise.resolve();
+    expect(valueInput.value).toBe('#daily #ideas');
+    expect(plugin.settings.rules[0]).toEqual({ key: '', value: '#daily #ideas', destination: '', debug: false });
+    expect(plugin.saveData).toHaveBeenCalledTimes(3);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '#daily #ideas', destination: '', debug: false }] });
+
+    await fireEvent.click(tagButton);
+    const thirdModal = (FuzzySuggestModal as any).__instances.pop();
+    expect(thirdModal).toBeDefined();
+    thirdModal.onChooseItem('#daily');
+    await jest.runOnlyPendingTimersAsync();
+    await Promise.resolve();
+    expect(valueInput.value).toBe('#ideas');
+    expect(plugin.settings.rules[0]).toEqual({ key: '', value: '#ideas', destination: '', debug: false });
+    expect(plugin.saveData).toHaveBeenCalledTimes(4);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '#ideas', destination: '', debug: false }] });
   });
 
   it('debounces text input saves and reorganizes on demand', async () => {
