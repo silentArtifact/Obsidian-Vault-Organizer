@@ -235,8 +235,8 @@ describe('settings UI', () => {
     await fireEvent.click(screen.getByText('Add Rule'));
     await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(1);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '', destination: '', matchType: 'equals', debug: false }] });
-    expect((plugin as any).rules).toEqual([{ key: '', matchType: 'equals', value: '', destination: '', debug: false }]);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '', destination: '', matchType: 'equals', debug: false, enabled: false }] });
+    expect((plugin as any).rules).toEqual([{ key: '', matchType: 'equals', value: '', destination: '', debug: false, enabled: false }]);
     expect(reorganizeSpy).not.toHaveBeenCalled();
 
     const keyInput = await screen.findByPlaceholderText('key') as HTMLInputElement;
@@ -244,8 +244,8 @@ describe('settings UI', () => {
     await jest.runOnlyPendingTimersAsync();
     await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(2);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: '', destination: '', matchType: 'equals', debug: false }] });
-    expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'equals', value: '', destination: '', debug: false }]);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: '', destination: '', matchType: 'equals', debug: false, enabled: false }] });
+    expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'equals', value: '', destination: '', debug: false, enabled: false }]);
     expect(reorganizeSpy).not.toHaveBeenCalled();
 
     const valueInput = await screen.findByPlaceholderText('value') as HTMLInputElement;
@@ -253,8 +253,8 @@ describe('settings UI', () => {
     await jest.runOnlyPendingTimersAsync();
     await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(3);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: '', matchType: 'equals', debug: false }] });
-    expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'equals', value: 'journal', destination: '', debug: false }]);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: '', matchType: 'equals', debug: false, enabled: false }] });
+    expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'equals', value: 'journal', destination: '', debug: false, enabled: false }]);
     expect(reorganizeSpy).not.toHaveBeenCalled();
 
     const destInput = await screen.findByPlaceholderText('destination folder (required)') as HTMLInputElement;
@@ -262,8 +262,8 @@ describe('settings UI', () => {
     await jest.runOnlyPendingTimersAsync();
     await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(4);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'equals', debug: false }] });
-    expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'equals', value: 'journal', destination: 'Journal', debug: false }]);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'equals', debug: false, enabled: false }] });
+    expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'equals', value: 'journal', destination: 'Journal', debug: false, enabled: false }]);
     expect(reorganizeSpy).not.toHaveBeenCalled();
 
     const flagsInput = await screen.findByPlaceholderText('flags') as HTMLInputElement;
@@ -274,8 +274,8 @@ describe('settings UI', () => {
     await fireEvent.change(matchTypeSelect, { target: { value: 'regex' } });
     await flushPromises();
     expect(plugin.saveData).toHaveBeenCalledTimes(5);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'regex', isRegex: true, flags: '', debug: false }] });
-    expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'regex', value: expect.any(RegExp), destination: 'Journal', debug: false }]);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'regex', isRegex: true, flags: '', debug: false, enabled: false }] });
+    expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'regex', value: expect.any(RegExp), destination: 'Journal', debug: false, enabled: false }]);
     expect(((plugin as any).rules[0].value as RegExp).source).toBe('journal');
     expect(((plugin as any).rules[0].value as RegExp).flags).toBe('');
     expect(reorganizeSpy).toHaveBeenCalledTimes(1);
@@ -287,25 +287,34 @@ describe('settings UI', () => {
     await jest.runOnlyPendingTimersAsync();
     await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(6);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'regex', isRegex: true, flags: 'i', debug: false }] });
-    expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'regex', value: expect.any(RegExp), destination: 'Journal', debug: false }]);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'regex', isRegex: true, flags: 'i', debug: false, enabled: false }] });
+    expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'regex', value: expect.any(RegExp), destination: 'Journal', debug: false, enabled: false }]);
     expect(((plugin as any).rules[0].value as RegExp).flags).toBe('i');
     expect(reorganizeSpy).toHaveBeenCalledTimes(1);
+
+    const activationToggle = (await screen.findByTitle('Activate this rule')) as HTMLInputElement;
+    expect(activationToggle.checked).toBe(false);
+    await fireEvent.click(activationToggle);
+    await flushPromises();
+    expect(plugin.saveData).toHaveBeenCalledTimes(7);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'regex', isRegex: true, flags: 'i', debug: false, enabled: true }] });
+    expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'regex', value: expect.any(RegExp), destination: 'Journal', debug: false, enabled: true }]);
+    expect(reorganizeSpy).toHaveBeenCalledTimes(2);
 
     const debugToggle = (await screen.findByTitle('Enable debug mode')) as HTMLInputElement;
     await fireEvent.click(debugToggle);
     await flushPromises();
-    expect(plugin.saveData).toHaveBeenCalledTimes(7);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'regex', isRegex: true, flags: 'i', debug: true }] });
-    expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'regex', value: expect.any(RegExp), destination: 'Journal', debug: true }]);
-    expect(reorganizeSpy).toHaveBeenCalledTimes(2);
+    expect(plugin.saveData).toHaveBeenCalledTimes(8);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'regex', isRegex: true, flags: 'i', debug: true, enabled: true }] });
+    expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'regex', value: expect.any(RegExp), destination: 'Journal', debug: true, enabled: true }]);
+    expect(reorganizeSpy).toHaveBeenCalledTimes(3);
 
     await fireEvent.click(screen.getByText('Remove'));
     await flushPromises();
-    expect(plugin.saveData).toHaveBeenCalledTimes(8);
+    expect(plugin.saveData).toHaveBeenCalledTimes(9);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [] });
     expect((plugin as any).rules).toEqual([]);
-    expect(reorganizeSpy).toHaveBeenCalledTimes(2);
+    expect(reorganizeSpy).toHaveBeenCalledTimes(3);
     expect((Notice as jest.Mock)).not.toHaveBeenCalled();
   });
 
@@ -325,9 +334,9 @@ describe('settings UI', () => {
     await Promise.resolve();
 
     expect(valueInput.value).toBe('#daily');
-    expect(plugin.settings.rules[0]).toEqual({ key: '', value: '#daily', destination: '', matchType: 'equals', debug: false });
+    expect(plugin.settings.rules[0]).toEqual({ key: '', value: '#daily', destination: '', matchType: 'equals', debug: false, enabled: false });
     expect(plugin.saveData).toHaveBeenCalledTimes(2);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '#daily', destination: '', matchType: 'equals', debug: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '#daily', destination: '', matchType: 'equals', debug: false, enabled: false }] });
 
     fileCaches.set('Ideas.md', { tags: ['#ideas'] });
     markdownFiles.push({ path: 'Ideas.md' });
@@ -340,9 +349,9 @@ describe('settings UI', () => {
     await jest.runOnlyPendingTimersAsync();
     await Promise.resolve();
     expect(valueInput.value).toBe('#daily #ideas');
-    expect(plugin.settings.rules[0]).toEqual({ key: '', value: '#daily #ideas', destination: '', matchType: 'equals', debug: false });
+    expect(plugin.settings.rules[0]).toEqual({ key: '', value: '#daily #ideas', destination: '', matchType: 'equals', debug: false, enabled: false });
     expect(plugin.saveData).toHaveBeenCalledTimes(3);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '#daily #ideas', destination: '', matchType: 'equals', debug: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '#daily #ideas', destination: '', matchType: 'equals', debug: false, enabled: false }] });
 
     await fireEvent.click(tagButton);
     const thirdModal = (FuzzySuggestModal as any).__instances.pop();
@@ -351,9 +360,9 @@ describe('settings UI', () => {
     await jest.runOnlyPendingTimersAsync();
     await Promise.resolve();
     expect(valueInput.value).toBe('#ideas');
-    expect(plugin.settings.rules[0]).toEqual({ key: '', value: '#ideas', destination: '', matchType: 'equals', debug: false });
+    expect(plugin.settings.rules[0]).toEqual({ key: '', value: '#ideas', destination: '', matchType: 'equals', debug: false, enabled: false });
     expect(plugin.saveData).toHaveBeenCalledTimes(4);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '#ideas', destination: '', matchType: 'equals', debug: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '#ideas', destination: '', matchType: 'equals', debug: false, enabled: false }] });
   });
 
   it('allows selecting frontmatter keys to populate the key field', async () => {
@@ -372,9 +381,9 @@ describe('settings UI', () => {
     await Promise.resolve();
 
     expect(keyInput.value).toBe('category');
-    expect(plugin.settings.rules[0]).toEqual({ key: 'category', value: '', destination: '', matchType: 'equals', debug: false });
+    expect(plugin.settings.rules[0]).toEqual({ key: 'category', value: '', destination: '', matchType: 'equals', debug: false, enabled: false });
     expect(plugin.saveData).toHaveBeenCalledTimes(2);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'category', value: '', destination: '', matchType: 'equals', debug: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'category', value: '', destination: '', matchType: 'equals', debug: false, enabled: false }] });
 
     fileCaches.set('Ideas.md', { tags: ['#ideas'], frontmatter: { topic: 'ideas' } });
     markdownFiles.push({ path: 'Ideas.md' });
@@ -389,9 +398,9 @@ describe('settings UI', () => {
     await Promise.resolve();
 
     expect(keyInput.value).toBe('topic');
-    expect(plugin.settings.rules[0]).toEqual({ key: 'topic', value: '', destination: '', matchType: 'equals', debug: false });
+    expect(plugin.settings.rules[0]).toEqual({ key: 'topic', value: '', destination: '', matchType: 'equals', debug: false, enabled: false });
     expect(plugin.saveData).toHaveBeenCalledTimes(3);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'topic', value: '', destination: '', matchType: 'equals', debug: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'topic', value: '', destination: '', matchType: 'equals', debug: false, enabled: false }] });
   });
 
   it('debounces text input saves and reorganizes on demand', async () => {
@@ -406,7 +415,7 @@ describe('settings UI', () => {
     await jest.runOnlyPendingTimersAsync();
     await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(2);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: '', destination: '', matchType: 'equals', debug: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: '', destination: '', matchType: 'equals', debug: false, enabled: false }] });
 
     await fireEvent.click(screen.getByText('Apply now'));
     await flushPromises();
@@ -428,7 +437,7 @@ describe('settings UI', () => {
     expect(warning.textContent).toMatch(/invalid regular expression/i);
     expect((Notice as jest.Mock)).toHaveBeenCalledWith(expect.stringContaining('Failed to parse regular expression'));
     expect(plugin.getRuleErrorForIndex(0)).toBeDefined();
-    expect(plugin.settings.rules[0]).toEqual({ key: '', value: '\\', destination: '', matchType: 'regex', isRegex: true, flags: '', debug: false });
+    expect(plugin.settings.rules[0]).toEqual({ key: '', value: '\\', destination: '', matchType: 'regex', isRegex: true, flags: '', debug: false, enabled: false });
     expect((plugin as any).rules).toEqual([]);
     expect(matchTypeSelect.value).toBe('regex');
   });

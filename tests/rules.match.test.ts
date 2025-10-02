@@ -15,7 +15,7 @@ describe('matchFrontmatter', () => {
   it('matches exact string values', () => {
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
     const rules: FrontmatterRule[] = [
-      { key: 'tag', matchType: 'equals', value: 'journal', destination: 'Journal' }
+      { key: 'tag', matchType: 'equals', value: 'journal', destination: 'Journal', enabled: true }
     ];
     const result = matchFrontmatter.call({ app }, file, rules);
     expect(result).toEqual(rules[0]);
@@ -24,18 +24,28 @@ describe('matchFrontmatter', () => {
   it('matches regex values', () => {
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'Journal' } });
     const rules: FrontmatterRule[] = [
-      { key: 'tag', matchType: 'regex', value: /journal/i, destination: 'Journal' }
+      { key: 'tag', matchType: 'regex', value: /journal/i, destination: 'Journal', enabled: true }
     ];
     const result = matchFrontmatter.call({ app }, file, rules);
     expect(result).toEqual(rules[0]);
   });
 
+  it('ignores disabled rules', () => {
+    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
+    const rules: FrontmatterRule[] = [
+      { key: 'tag', matchType: 'equals', value: 'journal', destination: 'Disabled', enabled: false },
+      { key: 'tag', matchType: 'equals', value: 'journal', destination: 'Active', enabled: true },
+    ];
+    const result = matchFrontmatter.call({ app }, file, rules);
+    expect(result).toEqual(rules[1]);
+  });
+
   it('matches using contains/starts-with/ends-with operators', () => {
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal-entry' } });
     const rules: FrontmatterRule[] = [
-      { key: 'tag', matchType: 'contains', value: 'journal', destination: 'Contains' },
-      { key: 'tag', matchType: 'starts-with', value: 'journal', destination: 'StartsWith' },
-      { key: 'tag', matchType: 'ends-with', value: 'entry', destination: 'EndsWith' },
+      { key: 'tag', matchType: 'contains', value: 'journal', destination: 'Contains', enabled: true },
+      { key: 'tag', matchType: 'starts-with', value: 'journal', destination: 'StartsWith', enabled: true },
+      { key: 'tag', matchType: 'ends-with', value: 'entry', destination: 'EndsWith', enabled: true },
     ];
     expect(matchFrontmatter.call({ app }, file, [rules[0]])).toEqual(rules[0]);
     expect(matchFrontmatter.call({ app }, file, [rules[1]])).toEqual(rules[1]);
@@ -45,7 +55,7 @@ describe('matchFrontmatter', () => {
   it('returns undefined when no frontmatter or missing keys', () => {
     metadataCache.getFileCache.mockReturnValue({});
     const rules: FrontmatterRule[] = [
-      { key: 'tag', matchType: 'equals', value: 'journal', destination: 'Journal' }
+      { key: 'tag', matchType: 'equals', value: 'journal', destination: 'Journal', enabled: true }
     ];
     const resultNoFrontmatter = matchFrontmatter.call({ app }, file, rules);
     expect(resultNoFrontmatter).toBeUndefined();
@@ -58,9 +68,9 @@ describe('matchFrontmatter', () => {
   it('returns the first matching rule when multiple rules match', () => {
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
     const rules: FrontmatterRule[] = [
-      { key: 'tag', matchType: 'equals', value: 'note', destination: 'Note' },
-      { key: 'tag', matchType: 'equals', value: 'journal', destination: 'Journal' },
-      { key: 'tag', matchType: 'regex', value: /journal/, destination: 'JournalRegex' }
+      { key: 'tag', matchType: 'equals', value: 'note', destination: 'Note', enabled: true },
+      { key: 'tag', matchType: 'equals', value: 'journal', destination: 'Journal', enabled: true },
+      { key: 'tag', matchType: 'regex', value: /journal/, destination: 'JournalRegex', enabled: true }
     ];
     const result = matchFrontmatter.call({ app }, file, rules);
     expect(result).toEqual(rules[1]);
@@ -69,7 +79,7 @@ describe('matchFrontmatter', () => {
   it('matches when frontmatter values are arrays of strings', () => {
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tags: ['work', 'journal'] } });
     const rules: FrontmatterRule[] = [
-      { key: 'tags', matchType: 'equals', value: 'journal', destination: 'Journal Folder' }
+      { key: 'tags', matchType: 'equals', value: 'journal', destination: 'Journal Folder', enabled: true }
     ];
     const result = matchFrontmatter.call({ app }, file, rules);
     expect(result).toEqual(rules[0]);
@@ -78,7 +88,7 @@ describe('matchFrontmatter', () => {
   it('matches when array values include mixed scalar types', () => {
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tags: ['daily', 42, true] } });
     const rules: FrontmatterRule[] = [
-      { key: 'tags', matchType: 'equals', value: '42', destination: 'Numbers' }
+      { key: 'tags', matchType: 'equals', value: '42', destination: 'Numbers', enabled: true }
     ];
     const result = matchFrontmatter.call({ app }, file, rules);
     expect(result).toEqual(rules[0]);
@@ -87,7 +97,7 @@ describe('matchFrontmatter', () => {
   it('matches regex rules against array elements', () => {
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tags: ['Work', 'Journal'] } });
     const rules: FrontmatterRule[] = [
-      { key: 'tags', matchType: 'regex', value: /journal/i, destination: 'Journal Regex' }
+      { key: 'tags', matchType: 'regex', value: /journal/i, destination: 'Journal Regex', enabled: true }
     ];
     const result = matchFrontmatter.call({ app }, file, rules);
     expect(result).toEqual(rules[0]);
@@ -95,7 +105,7 @@ describe('matchFrontmatter', () => {
 
   it('resets global regex rules between different notes', () => {
     const rules: FrontmatterRule[] = [
-      { key: 'tag', matchType: 'regex', value: /journal/g, destination: 'Journal Global' }
+      { key: 'tag', matchType: 'regex', value: /journal/g, destination: 'Journal Global', enabled: true }
     ];
 
     const fileA = { path: 'First.md' } as TFile;

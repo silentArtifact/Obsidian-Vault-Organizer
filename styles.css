@@ -45,3 +45,11 @@ body.is-phone .vault-organizer-rule-warning {
   font-size: var(--font-small);
   padding: var(--size-2-1) var(--size-4-1);
 }
+
+.setting-item.vault-organizer-rule-disabled {
+  opacity: 0.6;
+}
+
+.setting-item.vault-organizer-rule-disabled .vault-organizer-rule-warning {
+  opacity: 1;
+}
