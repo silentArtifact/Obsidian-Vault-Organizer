@@ -168,8 +168,8 @@ describe('settings UI', () => {
     (getAllTags as jest.Mock).mockClear();
     metadataResolvedCallback = undefined;
     fileCaches = new Map<string, any>([
-      ['Daily.md', { tags: ['#daily', '#journal'] }],
-      ['Todos.md', { tags: ['#todo'] }],
+      ['Daily.md', { tags: ['#daily', '#journal'], frontmatter: { category: 'daily', position: {} } }],
+      ['Todos.md', { tags: ['#todo'], frontmatter: { status: 'open' } }],
     ]);
     markdownFiles = [{ path: 'Daily.md' }, { path: 'Todos.md' }];
     const app = {
@@ -330,6 +330,44 @@ describe('settings UI', () => {
     expect(plugin.settings.rules[0]).toEqual({ key: '', value: '#ideas', destination: '', debug: false });
     expect(plugin.saveData).toHaveBeenCalledTimes(4);
     expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '#ideas', destination: '', debug: false }] });
+  });
+
+  it('allows selecting frontmatter keys to populate the key field', async () => {
+    await fireEvent.click(screen.getByText('Add Rule'));
+    await Promise.resolve();
+
+    const keyInput = await screen.findByPlaceholderText('key') as HTMLInputElement;
+    const keyButton = screen.getByTitle('Browse frontmatter keys');
+    await fireEvent.click(keyButton);
+
+    const modalInstance = (FuzzySuggestModal as any).__instances.pop();
+    expect(modalInstance).toBeDefined();
+    modalInstance.onChooseItem('category');
+
+    await jest.runOnlyPendingTimersAsync();
+    await Promise.resolve();
+
+    expect(keyInput.value).toBe('category');
+    expect(plugin.settings.rules[0]).toEqual({ key: 'category', value: '', destination: '', debug: false });
+    expect(plugin.saveData).toHaveBeenCalledTimes(2);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'category', value: '', destination: '', debug: false }] });
+
+    fileCaches.set('Ideas.md', { tags: ['#ideas'], frontmatter: { topic: 'ideas' } });
+    markdownFiles.push({ path: 'Ideas.md' });
+    metadataResolvedCallback?.();
+
+    await fireEvent.click(keyButton);
+    const secondModal = (FuzzySuggestModal as any).__instances.pop();
+    expect(secondModal).toBeDefined();
+    secondModal.onChooseItem('topic');
+
+    await jest.runOnlyPendingTimersAsync();
+    await Promise.resolve();
+
+    expect(keyInput.value).toBe('topic');
+    expect(plugin.settings.rules[0]).toEqual({ key: 'topic', value: '', destination: '', debug: false });
+    expect(plugin.saveData).toHaveBeenCalledTimes(3);
+    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'topic', value: '', destination: '', debug: false }] });
   });
 
   it('debounces text input saves and reorganizes on demand', async () => {
