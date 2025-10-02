@@ -1,14 +1,17 @@
 import {
     App,
+    FuzzySuggestModal,
     Plugin,
     PluginSettingTab,
     Setting,
     TAbstractFile,
     TFile,
+    debounce,
+    getAllTags,
     normalizePath,
     Notice,
-    debounce,
 } from 'obsidian';
+import type { TextComponent } from 'obsidian';
 import {
     FrontmatterRule,
     SerializedFrontmatterRule,
@@ -205,6 +208,7 @@ export default class VaultOrganizer extends Plugin {
 class RuleSettingTab extends PluginSettingTab {
     plugin: VaultOrganizer;
     private debouncedSaveOnly: ReturnType<typeof debounce>;
+    private aggregatedTags: string[] = [];
 
     constructor(app: App, plugin: VaultOrganizer) {
         super(app, plugin);
@@ -212,6 +216,10 @@ class RuleSettingTab extends PluginSettingTab {
         this.debouncedSaveOnly = debounce(async () => {
             await this.plugin.saveSettingsWithoutReorganizing();
         }, 300);
+        this.refreshAggregatedTags();
+        this.plugin.registerEvent(this.plugin.app.metadataCache.on('resolved', () => {
+            this.refreshAggregatedTags();
+        }));
     }
 
     private scheduleSaveOnly() {
@@ -222,9 +230,49 @@ class RuleSettingTab extends PluginSettingTab {
         this.debouncedSaveOnly.cancel();
     }
 
+    private refreshAggregatedTags() {
+        const tagSet = new Set<string>();
+        const markdownFiles = this.plugin.app.vault.getMarkdownFiles?.() ?? [];
+        markdownFiles.forEach(file => {
+            const cache = this.plugin.app.metadataCache.getFileCache(file);
+            if (!cache) {
+                return;
+            }
+            const tags = getAllTags(cache);
+            if (!tags) {
+                return;
+            }
+            tags.forEach(tag => tagSet.add(tag));
+        });
+        this.aggregatedTags = Array.from(tagSet).sort((a, b) => a.localeCompare(b));
+    }
+
+    private getAggregatedTags(): string[] {
+        if (!this.aggregatedTags.length) {
+            this.refreshAggregatedTags();
+        }
+        return this.aggregatedTags;
+    }
+
+    private openTagPicker(tags: string[], onSelect: (tag: string) => void) {
+        if (!tags.length) {
+            return;
+        }
+        const modal = new RuleTagPickerModal(this.app, tags, onSelect);
+        modal.open();
+    }
+
+    private toggleTagValue(currentValue: string, tag: string): string {
+        const values = currentValue.split(/\s+/).filter(Boolean);
+        const hasTag = values.includes(tag);
+        const nextValues = hasTag ? values.filter(value => value !== tag) : [...values, tag];
+        return nextValues.join(' ');
+    }
+
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
+        this.refreshAggregatedTags();
 
         this.plugin.settings.rules.forEach((rule, index) => {
             const setting = new Setting(containerEl)
@@ -261,7 +309,9 @@ class RuleSettingTab extends PluginSettingTab {
                         currentRule.key = value;
                         this.scheduleSaveOnly();
                     }));
-            setting.addText(text =>
+            let valueTextComponent: TextComponent | undefined;
+            setting.addText(text => {
+                valueTextComponent = text;
                 text
                     .setPlaceholder('value')
                     .setValue(rule.value)
@@ -272,6 +322,24 @@ class RuleSettingTab extends PluginSettingTab {
                         }
                         currentRule.value = value;
                         this.scheduleSaveOnly();
+                    });
+            });
+            setting.addExtraButton(button =>
+                button
+                    .setIcon('hashtag')
+                    .setTooltip('Browse tags')
+                    .onClick(() => {
+                        const tags = this.getAggregatedTags();
+                        this.openTagPicker(tags, (tag) => {
+                            const currentRule = this.plugin.settings.rules[index];
+                            if (!currentRule || !valueTextComponent) {
+                                return;
+                            }
+                            const nextValue = this.toggleTagValue(valueTextComponent.getValue(), tag);
+                            valueTextComponent.setValue(nextValue);
+                            currentRule.value = nextValue;
+                            this.scheduleSaveOnly();
+                        });
                     }));
             setting.addText(text =>
                 text
@@ -379,5 +447,23 @@ class RuleSettingTab extends PluginSettingTab {
                 warningEl.style.display = 'none';
             }
         });
+    }
+}
+
+class RuleTagPickerModal extends FuzzySuggestModal<string> {
+    constructor(app: App, private readonly tags: string[], private readonly onSelect: (tag: string) => void) {
+        super(app);
+    }
+
+    getItems(): string[] {
+        return this.tags;
+    }
+
+    getItemText(tag: string): string {
+        return tag;
+    }
+
+    onChooseItem(tag: string): void {
+        this.onSelect(tag);
     }
 }
