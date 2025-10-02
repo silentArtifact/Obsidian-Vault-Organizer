@@ -213,6 +213,23 @@ describe('handleFileChange', () => {
     expect(lastFolderCall).toBeLessThan(renameCallOrder);
   });
 
+  it('shows a failure notice when renaming fails', async () => {
+    await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
+    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
+    const file = createTFile('Temp/Test.md');
+    const renameError = new Error('rename failed');
+    renameFile.mockRejectedValueOnce(renameError);
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await handle(file);
+
+    expect(renameFile).toHaveBeenCalledWith(file, 'Journal/Test.md');
+    expect(Notice).toHaveBeenCalledWith('Failed to move "Test" to "Journal/Test.md": rename failed');
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to handle file change', renameError);
+
+    consoleErrorSpy.mockRestore();
+  });
+
   it('applies rules to existing files via command', async () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
     const file = createTFile('Temp/Test.md');

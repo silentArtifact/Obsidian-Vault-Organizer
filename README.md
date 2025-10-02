@@ -62,5 +62,6 @@ Feel free to stack these rules; only the first rule that matches a note will mov
 - **One rule per note** – The plugin stops at the first matching rule. Order rules carefully if multiple destinations could apply.
 - **Frontmatter must exist** – Notes without the configured key are ignored. Double-check the frontmatter key spelling and that it is located above the `---` delimiter.
 - **Unexpected folder structure** – Remember that destinations are relative to the vault root. Use Debug mode first if you are unsure where a rule will move a note.
+- **Move conflicts** – If Obsidian cannot move a note (for example, when another file already exists at the destination), a notice such as `Failed to move "Note Title" to "Projects/Note Title.md": EEXIST: file already exists` appears so you know which file was affected and why.
 
 If something still looks wrong, enable Debug on the suspect rule to view the notices generated during future edits, and verify the values stored in the note’s frontmatter.

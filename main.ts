@@ -187,6 +187,8 @@ export default class VaultOrganizer extends Plugin {
     }
 
     private async applyRulesToFile(file: TFile): Promise<void> {
+        const noteName = file.basename;
+        let intendedDestination: string | undefined;
         try {
             const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
             if (!frontmatter) {
@@ -209,6 +211,7 @@ export default class VaultOrganizer extends Plugin {
 
             const destinationFolder = normalizePath(trimmedDestination);
             const newPath = normalizePath(`${trimmedDestination}/${file.name}`);
+            intendedDestination = newPath;
             if (file.path === newPath) {
                 return;
             }
@@ -222,6 +225,9 @@ export default class VaultOrganizer extends Plugin {
             await this.ensureFolderExists(destinationFolder);
             await this.app.fileManager.renameFile(file, newPath);
         } catch (err) {
+            const reason = err instanceof Error ? err.message : String(err);
+            const destination = intendedDestination ?? 'the configured destination';
+            new Notice(`Failed to move "${noteName}" to "${destination}": ${reason}`);
             console.error('Failed to handle file change', err);
         }
     }
