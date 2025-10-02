@@ -1,7 +1,10 @@
 import { App, TFile } from 'obsidian';
 
+export type FrontmatterMatchType = 'equals' | 'contains' | 'starts-with' | 'ends-with' | 'regex';
+
 export interface FrontmatterRule {
     key: string;
+    matchType: FrontmatterMatchType;
     value: string | RegExp;
     destination: string;
     debug?: boolean;
@@ -9,6 +12,7 @@ export interface FrontmatterRule {
 
 export interface SerializedFrontmatterRule {
     key: string;
+    matchType?: FrontmatterMatchType;
     value: string;
     destination: string;
     isRegex?: boolean;
@@ -32,30 +36,49 @@ export function matchFrontmatter(this: { app: App }, file: TFile, rules: Frontma
 
         return values.some(item => {
             const valueStr = String(item);
-            if (rule.value instanceof RegExp) {
-                rule.value.lastIndex = 0;
-                return rule.value.test(valueStr);
+            switch (rule.matchType) {
+                case 'regex': {
+                    if (!(rule.value instanceof RegExp)) {
+                        return false;
+                    }
+                    rule.value.lastIndex = 0;
+                    return rule.value.test(valueStr);
+                }
+                case 'contains':
+                    return valueStr.includes(String(rule.value));
+                case 'starts-with':
+                    return valueStr.startsWith(String(rule.value));
+                case 'ends-with':
+                    return valueStr.endsWith(String(rule.value));
+                case 'equals':
+                default:
+                    return valueStr === String(rule.value);
             }
-            return valueStr === rule.value;
         });
     });
 }
 
 export function serializeFrontmatterRules(rules: FrontmatterRule[]): SerializedFrontmatterRule[] {
     return rules.map(rule => {
-        if (rule.value instanceof RegExp) {
+        const matchType: FrontmatterMatchType = rule.matchType ?? 'equals';
+        if (matchType === 'regex') {
+            const pattern = rule.value instanceof RegExp ? rule.value.source : String(rule.value);
+            const flags = rule.value instanceof RegExp ? rule.value.flags : '';
             return {
                 key: rule.key,
-                value: rule.value.source,
+                matchType,
+                value: pattern,
                 destination: rule.destination,
                 isRegex: true,
-                flags: rule.value.flags,
+                flags,
                 debug: rule.debug,
             };
         }
+
         return {
             key: rule.key,
-            value: rule.value,
+            matchType,
+            value: String(rule.value),
             destination: rule.destination,
             debug: rule.debug,
         };
@@ -86,11 +109,13 @@ export function deserializeFrontmatterRules(data: SerializedFrontmatterRule[] = 
     const errors: FrontmatterRuleDeserializationError[] = [];
 
     data.forEach((rule, index) => {
-        if (rule.isRegex) {
+        const matchType: FrontmatterMatchType = rule.matchType ?? (rule.isRegex ? 'regex' : 'equals');
+        if (matchType === 'regex') {
             try {
                 const regex = new RegExp(rule.value, rule.flags);
                 const parsedRule: FrontmatterRule = {
                     key: rule.key,
+                    matchType,
                     value: regex,
                     destination: rule.destination,
                     debug: rule.debug,
@@ -105,13 +130,14 @@ export function deserializeFrontmatterRules(data: SerializedFrontmatterRule[] = 
                 errors.push({
                     index,
                     message,
-                    rule: { ...rule },
+                    rule: { ...rule, matchType },
                     cause: error,
                 });
             }
         } else {
             const parsedRule: FrontmatterRule = {
                 key: rule.key,
+                matchType,
                 value: rule.value,
                 destination: rule.destination,
                 debug: rule.debug,
