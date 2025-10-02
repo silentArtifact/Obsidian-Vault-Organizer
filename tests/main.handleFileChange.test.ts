@@ -91,6 +91,7 @@ describe('handleFileChange', () => {
   let existingFolders: Set<string>;
   let plugin: VaultOrganizer;
   let handle: (file: any) => Promise<void>;
+  let fileEventHandlers: Record<string, (file: any, ...args: any[]) => Promise<void> | void>;
   let addCommandMock: jest.Mock;
   let registeredCommands: any[];
   let metadataChangedHandler: ((file: any) => Promise<void> | void) | undefined;
@@ -102,6 +103,7 @@ describe('handleFileChange', () => {
 
   beforeEach(async () => {
     metadataChangedHandler = undefined;
+    fileEventHandlers = {};
     metadataCache = {
       getFileCache: jest.fn(),
       on: jest.fn((event: string, cb: (file: any) => Promise<void> | void) => {
@@ -118,7 +120,10 @@ describe('handleFileChange', () => {
       existingFolders.add(path);
     });
     const vault = {
-      on: jest.fn((_: string, cb: any) => { handle = cb; }),
+      on: jest.fn((event: string, cb: any) => {
+        fileEventHandlers[event] = cb;
+        return {};
+      }),
       getName: jest.fn().mockReturnValue('Vault'),
       getAbstractFileByPath,
       createFolder,
@@ -142,7 +147,9 @@ describe('handleFileChange', () => {
     addCommandMock = jest.fn((command) => { registeredCommands.push(command); return command; });
     (plugin as any).addCommand = addCommandMock;
     await plugin.onload();
+    handle = fileEventHandlers['modify'] as typeof handle;
     expect(metadataCache.on).toHaveBeenCalledWith('changed', expect.any(Function));
+    expect(vault.on).toHaveBeenCalledWith('rename', expect.any(Function));
     (Notice as jest.Mock).mockClear();
   });
 
@@ -229,6 +236,20 @@ describe('handleFileChange', () => {
     expect(metadataChangedHandler).toBeDefined();
 
     await metadataChangedHandler?.(file);
+
+    expect(renameFile).toHaveBeenCalledWith(file, 'Journal/Test.md');
+  });
+
+  it('applies rules when files are renamed', async () => {
+    await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
+    const file = createTFile('Temp/Test.md');
+
+    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
+
+    const renameHandler = fileEventHandlers['rename'];
+    expect(renameHandler).toBeDefined();
+
+    await renameHandler?.(file, 'Old/Test.md');
 
     expect(renameFile).toHaveBeenCalledWith(file, 'Journal/Test.md');
   });
