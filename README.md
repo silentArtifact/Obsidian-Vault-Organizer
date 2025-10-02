@@ -1,91 +1,63 @@
 # Vault Organizer
 
-Vault Organizer is a plugin for Obsidian (https://obsidian.md) that helps organize your vault.
+Vault Organizer is an Obsidian plugin that watches the frontmatter of your Markdown notes and automatically files them into folders that match rules you define.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+## Frontmatter rules at a glance
 
+Each rule targets a single frontmatter key and determines what to do when the note contains a matching value:
 
+- **Key** – the name of the frontmatter property to inspect (for example `status`, `tags`, or `type`).
+- **Value** – either a literal string that must match exactly or a regular expression (enable **Regex** to switch modes). Frontmatter arrays are supported; the rule matches if *any* element satisfies the value check.
+- **Destination** – the folder path (relative to the vault root) where matching notes should live. Missing folders are created on demand when the rule runs.
+- **Debug** – when enabled the plugin only reports where the note *would* move and leaves it in place, which is useful when testing a new rule.
 
-## First time developing plugins?
+Rules are evaluated in the order they appear in the settings tab; the first matching rule wins. Notes without matching rules are left untouched.
 
-Quick starting guide for new plugin devs:
+### Adding and editing rules
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+1. Open **Settings → Community Plugins → Vault Organizer**.
+2. Use **Add Rule** to create a new entry or edit the inputs beside an existing rule.
+3. Fill in the key, value, and destination. Toggle **Regex** if the value should be treated as a regular expression and supply flags such as `i` for case-insensitive matching.
+4. Toggle **Debug** while experimenting so you can confirm moves without reorganizing files immediately.
+5. Press **Apply now** (or toggle Regex/Debug) to save changes and immediately re-run the rules across your vault. Otherwise, updates are saved automatically after a short pause.
 
-## Releasing new releases
+You can also run the **Reorganize notes based on frontmatter rules** command from the command palette to apply the current rules on demand.
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+### Automatic moves
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+Vault Organizer listens for vault changes and applies the rules when:
 
-## Adding your plugin to the community plugin list
+- A Markdown file is created.
+- A Markdown file is modified.
+- Obsidian finishes reading updated frontmatter metadata for a Markdown file.
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+If a matching rule has a non-empty destination and Debug is off, the plugin moves the note into that folder. When Debug is on, a notice appears instead (e.g., `DEBUG: NoteTitle would be moved to Vault/Projects/In Progress`).
 
-## How to use
+## Building and installing from source
 
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+1. Install dependencies with `npm install`.
+2. Build the production bundle with `npm run build`. This compiles `main.ts` into `main.js` using esbuild.
+3. Copy `main.js`, `manifest.json`, and `styles.css` into your vault at `Vault/.obsidian/plugins/obsidian-vault-organizer/` (create the folder if needed).
+4. Reload Obsidian and enable the plugin from the Community Plugins settings panel.
 
-When configuring rules in the plugin settings, each rule includes a **Debug** toggle. When enabled, the plugin will show a notification such as `DEBUG: NOTE_NAME would be moved to Vault/Folder/Subfolder` instead of moving the note.
+For development, `npm run dev` keeps the build running in watch mode while you edit TypeScript sources.
 
-## Manually installing the plugin
+## Example rule setups
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+- **Status-based pipeline** – `status = "in-progress"` → `Projects/In Progress`, `status = "done"` → `Projects/Archive`.
+- **Tag routing** – Regex rule with `key = "tags"`, `value = "^meeting"`, `flags = "i"`, `destination = "Meetings"` to collect all notes whose tags start with `meeting`.
+- **Type folders** – `type = "journal"` → `Journal`, `type = "reference"` → `Reference`.
+- **Area and projects** – Regex on `area` such as `^(home|family)$` → `Areas/Personal`, while a simple rule `area = "work"` → `Areas/Work`.
 
-## Improve code quality with eslint (optional)
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- To use eslint with this project, make sure to install eslint from terminal:
-  - `npm install -g eslint`
-- To use eslint to analyze this project use this command:
-  - `eslint main.ts`
-  - eslint will then create a report with suggestions for code improvement by file and line number.
-- If your source code is in a folder, such as `src`, you can use eslint with this command to analyze all files in that folder:
-  - `eslint .\src\`
+Feel free to stack these rules; only the first rule that matches a note will move it.
 
-## Funding URL
+## Troubleshooting and limitations
 
-You can include funding URLs where people who use your plugin can financially support it.
+- **Invalid regular expressions** – When a regex cannot be parsed the rule is skipped, a warning appears in the settings UI, and a notice is logged to the developer console. Edit the pattern or flags, then click **Apply now**.
+- **Destination is required** – Rules with an empty destination never move notes. Confirm the path is set and spelled correctly.
+- **Only Markdown files are processed** – Other file types are ignored, even if they contain frontmatter-like text.
+- **One rule per note** – The plugin stops at the first matching rule. Order rules carefully if multiple destinations could apply.
+- **Frontmatter must exist** – Notes without the configured key are ignored. Double-check the frontmatter key spelling and that it is located above the `---` delimiter.
+- **Unexpected folder structure** – Remember that destinations are relative to the vault root. Use Debug mode first if you are unsure where a rule will move a note.
 
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
-```
-
-If you have multiple URLs, you can also do:
-
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
-```
-
-## API Documentation
-
-See https://github.com/obsidianmd/obsidian-api
+If something still looks wrong, enable Debug on the suspect rule to view the notices generated during future edits, and verify the values stored in the note’s frontmatter.
