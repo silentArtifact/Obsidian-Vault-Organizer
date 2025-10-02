@@ -94,6 +94,15 @@ describe('matchFrontmatter', () => {
     expect(result).toEqual(rules[0]);
   });
 
+  it('matches any selected tag when rule values contain multiple tags', () => {
+    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tags: ['#journal', '#ideas'] } });
+    const rules: FrontmatterRule[] = [
+      { key: 'tags', matchType: 'equals', value: '#daily #ideas #todo', destination: 'Ideas', enabled: true }
+    ];
+    const result = matchFrontmatter.call({ app }, file, rules);
+    expect(result).toEqual(rules[0]);
+  });
+
   it('matches regex rules against array elements', () => {
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tags: ['Work', 'Journal'] } });
     const rules: FrontmatterRule[] = [

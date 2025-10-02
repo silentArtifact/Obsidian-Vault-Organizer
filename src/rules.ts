@@ -37,30 +37,65 @@ export function matchFrontmatter(this: { app: App }, file: TFile, rules: Frontma
             return false;
         }
 
-        const values = Array.isArray(value) ? value : [value];
+        const isArrayValue = Array.isArray(value);
+        const values = isArrayValue ? value : [value];
+        const matchType: FrontmatterMatchType = rule.matchType ?? 'equals';
+
+        if (matchType === 'regex') {
+            if (!(rule.value instanceof RegExp)) {
+                return false;
+            }
+            return values.some(item => {
+                const valueStr = String(item);
+                rule.value.lastIndex = 0;
+                return rule.value.test(valueStr);
+            });
+        }
+
+        const ruleCandidates = getRuleCandidates(String(rule.value), isArrayValue);
+        if (!ruleCandidates.length) {
+            return false;
+        }
 
         return values.some(item => {
             const valueStr = String(item);
-            switch (rule.matchType) {
-                case 'regex': {
-                    if (!(rule.value instanceof RegExp)) {
-                        return false;
-                    }
-                    rule.value.lastIndex = 0;
-                    return rule.value.test(valueStr);
-                }
-                case 'contains':
-                    return valueStr.includes(String(rule.value));
-                case 'starts-with':
-                    return valueStr.startsWith(String(rule.value));
-                case 'ends-with':
-                    return valueStr.endsWith(String(rule.value));
-                case 'equals':
-                default:
-                    return valueStr === String(rule.value);
-            }
+            return ruleCandidates.some(candidate => matchByType(valueStr, candidate, matchType));
         });
     });
+}
+
+function getRuleCandidates(value: string, shouldExpand: boolean): string[] {
+    if (!shouldExpand) {
+        return [value];
+    }
+
+    const trimmed = value.trim();
+    const tokens = trimmed.split(/\s+/).map(token => token.trim()).filter(Boolean);
+
+    if (!tokens.length) {
+        return [trimmed];
+    }
+
+    const unique = new Set<string>();
+    if (trimmed) {
+        unique.add(trimmed);
+    }
+    tokens.forEach(token => unique.add(token));
+    return Array.from(unique);
+}
+
+function matchByType(value: string, candidate: string, matchType: FrontmatterMatchType): boolean {
+    switch (matchType) {
+        case 'contains':
+            return value.includes(candidate);
+        case 'starts-with':
+            return value.startsWith(candidate);
+        case 'ends-with':
+            return value.endsWith(candidate);
+        case 'equals':
+        default:
+            return value === candidate;
+    }
 }
 
 export function serializeFrontmatterRules(rules: FrontmatterRule[]): SerializedFrontmatterRule[] {
