@@ -1,8 +1,47 @@
 /*
-
 This CSS file will be included with your plugin, and
 available in the app when your plugin is enabled.
-
 If your plugin does not need CSS, delete this file.
-
 */
+
+.vault-organizer-rule-error,
+.vault-organizer-rule-warning {
+  border-radius: var(--radius-s);
+  padding: var(--size-2-2) var(--size-4-2);
+  margin-top: var(--size-2-2);
+  margin-bottom: var(--size-2-2);
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  font-weight: 500;
+}
+
+.vault-organizer-rule-error {
+  border: 1px solid var(--color-red, #d9534f);
+  background-color: var(--background-modifier-error, rgba(217, 83, 79, 0.15));
+  color: var(--text-normal);
+}
+
+.vault-organizer-rule-error::before {
+  content: "\26A0";
+  font-size: 1.1em;
+  color: var(--color-red, #d9534f);
+}
+
+.vault-organizer-rule-warning {
+  border: 1px solid var(--color-orange, #f0ad4e);
+  background-color: var(--background-modifier-warning, rgba(240, 173, 78, 0.15));
+  color: var(--text-normal);
+}
+
+.vault-organizer-rule-warning::before {
+  content: "\26A0";
+  font-size: 1.1em;
+  color: var(--color-orange, #f0ad4e);
+}
+
+body.is-phone .vault-organizer-rule-error,
+body.is-phone .vault-organizer-rule-warning {
+  font-size: var(--font-small);
+  padding: var(--size-2-1) var(--size-4-1);
+}
