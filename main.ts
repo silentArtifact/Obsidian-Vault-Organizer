@@ -209,6 +209,7 @@ class RuleSettingTab extends PluginSettingTab {
     plugin: VaultOrganizer;
     private debouncedSaveOnly: ReturnType<typeof debounce>;
     private aggregatedTags: string[] = [];
+    private frontmatterKeys: string[] = [];
 
     constructor(app: App, plugin: VaultOrganizer) {
         super(app, plugin);
@@ -217,8 +218,10 @@ class RuleSettingTab extends PluginSettingTab {
             await this.plugin.saveSettingsWithoutReorganizing();
         }, 300);
         this.refreshAggregatedTags();
+        this.refreshFrontmatterKeys();
         this.plugin.registerEvent(this.plugin.app.metadataCache.on('resolved', () => {
             this.refreshAggregatedTags();
+            this.refreshFrontmatterKeys();
         }));
     }
 
@@ -254,11 +257,42 @@ class RuleSettingTab extends PluginSettingTab {
         return this.aggregatedTags;
     }
 
+    private refreshFrontmatterKeys() {
+        const keySet = new Set<string>();
+        const markdownFiles = this.plugin.app.vault.getMarkdownFiles?.() ?? [];
+        markdownFiles.forEach(file => {
+            const cache = this.plugin.app.metadataCache.getFileCache(file);
+            const frontmatter = cache?.frontmatter;
+            if (!frontmatter) {
+                return;
+            }
+            Object.keys(frontmatter)
+                .filter(key => key !== 'position')
+                .forEach(key => keySet.add(key));
+        });
+        this.frontmatterKeys = Array.from(keySet).sort((a, b) => a.localeCompare(b));
+    }
+
+    private getFrontmatterKeys(): string[] {
+        if (!this.frontmatterKeys.length) {
+            this.refreshFrontmatterKeys();
+        }
+        return this.frontmatterKeys;
+    }
+
     private openTagPicker(tags: string[], onSelect: (tag: string) => void) {
         if (!tags.length) {
             return;
         }
         const modal = new RuleTagPickerModal(this.app, tags, onSelect);
+        modal.open();
+    }
+
+    private openFrontmatterKeyPicker(keys: string[], onSelect: (key: string) => void) {
+        if (!keys.length) {
+            return;
+        }
+        const modal = new RuleFrontmatterKeyPickerModal(this.app, keys, onSelect);
         modal.open();
     }
 
@@ -273,6 +307,7 @@ class RuleSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
         this.refreshAggregatedTags();
+        this.refreshFrontmatterKeys();
 
         this.plugin.settings.rules.forEach((rule, index) => {
             const setting = new Setting(containerEl)
@@ -297,7 +332,9 @@ class RuleSettingTab extends PluginSettingTab {
                 }
             };
 
-            setting.addText(text =>
+            let keyTextComponent: TextComponent | undefined;
+            setting.addText(text => {
+                keyTextComponent = text;
                 text
                     .setPlaceholder('key')
                     .setValue(rule.key)
@@ -308,6 +345,23 @@ class RuleSettingTab extends PluginSettingTab {
                         }
                         currentRule.key = value;
                         this.scheduleSaveOnly();
+                    });
+            });
+            setting.addExtraButton(button =>
+                button
+                    .setIcon('list')
+                    .setTooltip('Browse frontmatter keys')
+                    .onClick(() => {
+                        const keys = this.getFrontmatterKeys();
+                        this.openFrontmatterKeyPicker(keys, (key) => {
+                            const currentRule = this.plugin.settings.rules[index];
+                            if (!currentRule || !keyTextComponent) {
+                                return;
+                            }
+                            keyTextComponent.setValue(key);
+                            currentRule.key = key;
+                            this.scheduleSaveOnly();
+                        });
                     }));
             let valueTextComponent: TextComponent | undefined;
             setting.addText(text => {
@@ -465,5 +519,23 @@ class RuleTagPickerModal extends FuzzySuggestModal<string> {
 
     onChooseItem(tag: string): void {
         this.onSelect(tag);
+    }
+}
+
+class RuleFrontmatterKeyPickerModal extends FuzzySuggestModal<string> {
+    constructor(app: App, private readonly keys: string[], private readonly onSelect: (key: string) => void) {
+        super(app);
+    }
+
+    getItems(): string[] {
+        return this.keys;
+    }
+
+    getItemText(key: string): string {
+        return key;
+    }
+
+    onChooseItem(key: string): void {
+        this.onSelect(key);
     }
 }
