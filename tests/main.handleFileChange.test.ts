@@ -51,7 +51,11 @@ jest.mock('obsidian', () => {
     App: class {},
     Plugin: class {
       app: any;
-      constructor(app: any) { this.app = app; }
+      manifest: any;
+      constructor(app: any, manifest: any) {
+        this.app = app;
+        this.manifest = manifest;
+      }
       loadData() { return Promise.resolve(undefined); }
       saveData() { return Promise.resolve(); }
       addSettingTab() {}
@@ -76,6 +80,8 @@ jest.mock('obsidian', () => {
 
 import VaultOrganizer from '../main';
 import { TFile, Notice } from 'obsidian';
+
+const createTFile = (path: string): TFile => new (TFile as unknown as { new(path: string): TFile })(path);
 
 describe('handleFileChange', () => {
   let metadataCache: { getFileCache: jest.Mock; on: jest.Mock };
@@ -119,7 +125,18 @@ describe('handleFileChange', () => {
       getMarkdownFiles: jest.fn().mockReturnValue([]),
     };
     const app = { metadataCache, fileManager: { renameFile }, vault } as any;
-    plugin = new VaultOrganizer(app);
+    const manifest = {
+      id: 'obsidian-vault-organizer',
+      name: 'Vault Organizer',
+      version: '1.0.0',
+      minAppVersion: '1.0.0',
+      description: '',
+      author: '',
+      authorUrl: '',
+      dir: 'vault-organizer',
+      isDesktopOnly: false,
+    } as const;
+    plugin = new VaultOrganizer(app, manifest as any);
     plugin.addSettingTab = jest.fn();
     registeredCommands = [];
     addCommandMock = jest.fn((command) => { registeredCommands.push(command); return command; });
@@ -133,7 +150,7 @@ describe('handleFileChange', () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal/' });
     expect((plugin as any).rules).toContainEqual(expect.objectContaining({ key: 'tag', value: 'journal', destination: 'Journal/' }));
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
-    const file = new TFile('Temp/Test.md');
+    const file = createTFile('Temp/Test.md');
     await handle(file);
     expect(renameFile).toHaveBeenCalledWith(file, 'Journal/Test.md');
   });
@@ -141,7 +158,7 @@ describe('handleFileChange', () => {
   it('skips rename when destination is blank', async () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: '   ' });
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
-    const file = new TFile('Temp/Test.md');
+    const file = createTFile('Temp/Test.md');
     await handle(file);
     expect(renameFile).not.toHaveBeenCalled();
     expect(Notice).not.toHaveBeenCalled();
@@ -151,7 +168,7 @@ describe('handleFileChange', () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal', debug: true });
     expect((plugin as any).rules).toContainEqual(expect.objectContaining({ key: 'tag', value: 'journal', destination: 'Journal', debug: true }));
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
-    const file = new TFile('Temp/Test.md');
+    const file = createTFile('Temp/Test.md');
     await handle(file);
     expect(renameFile).not.toHaveBeenCalled();
     expect(Notice).toHaveBeenCalledWith('DEBUG: Test would be moved to Vault/Journal');
@@ -161,10 +178,10 @@ describe('handleFileChange', () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
 
     metadataCache.getFileCache.mockReturnValueOnce({ frontmatter: { tag: 'note' } });
-    await handle(new TFile('Temp/Test.md'));
+    await handle(createTFile('Temp/Test.md'));
 
     metadataCache.getFileCache.mockReturnValueOnce({ frontmatter: { tag: 'journal' } });
-    await handle(new TFile('Journal/Test.md'));
+    await handle(createTFile('Journal/Test.md'));
 
     expect(renameFile).not.toHaveBeenCalled();
     expect(Notice).not.toHaveBeenCalled();
@@ -173,7 +190,7 @@ describe('handleFileChange', () => {
   it('creates missing destination folders before renaming', async () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal/2023' });
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
-    const file = new TFile('Temp/Test.md');
+    const file = createTFile('Temp/Test.md');
 
     await handle(file);
 
@@ -187,7 +204,7 @@ describe('handleFileChange', () => {
 
   it('applies rules to existing files via command', async () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
-    const file = new TFile('Temp/Test.md');
+    const file = createTFile('Temp/Test.md');
     (plugin.app.vault.getMarkdownFiles as jest.Mock).mockReturnValue([file]);
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
 
@@ -200,7 +217,7 @@ describe('handleFileChange', () => {
 
   it('applies rules after metadata cache resolves frontmatter', async () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
-    const file = new TFile('Temp/Test.md');
+    const file = createTFile('Temp/Test.md');
 
     metadataCache.getFileCache
       .mockReturnValueOnce(undefined)

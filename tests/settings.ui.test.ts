@@ -5,8 +5,10 @@
 jest.mock('obsidian', () => {
   class Plugin {
     app: any;
-    constructor(app: any) {
+    manifest: any;
+    constructor(app: any, manifest: any) {
       this.app = app;
+      this.manifest = manifest;
     }
     loadData() { return Promise.resolve(undefined); }
     saveData(_data: any) { return Promise.resolve(); }
@@ -132,7 +134,18 @@ describe('settings UI', () => {
       fileManager: {},
       vault: { on: jest.fn() },
     } as any;
-    plugin = new VaultOrganizer(app);
+    const manifest = {
+      id: 'obsidian-vault-organizer',
+      name: 'Vault Organizer',
+      version: '1.0.0',
+      minAppVersion: '1.0.0',
+      description: '',
+      author: '',
+      authorUrl: '',
+      dir: 'vault-organizer',
+      isDesktopOnly: false,
+    } as const;
+    plugin = new VaultOrganizer(app, manifest as any);
     plugin.saveData = jest.fn().mockResolvedValue(undefined);
     reorganizeSpy = jest
       .spyOn(plugin as any, 'reorganizeAllMarkdownFiles')
