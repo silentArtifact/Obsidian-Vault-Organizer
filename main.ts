@@ -14,6 +14,7 @@ import {
 import type { TextComponent } from 'obsidian';
 import {
     FrontmatterRule,
+    FrontmatterMatchType,
     SerializedFrontmatterRule,
     deserializeFrontmatterRules,
     FrontmatterRuleDeserializationError,
@@ -29,6 +30,35 @@ interface VaultOrganizerSettings {
 
 const DEFAULT_SETTINGS: VaultOrganizerSettings = {
     rules: [],
+}
+
+const MATCH_TYPE_OPTIONS: { value: FrontmatterMatchType; label: string }[] = [
+    { value: 'equals', label: 'Equals' },
+    { value: 'contains', label: 'Contains' },
+    { value: 'starts-with', label: 'Starts with' },
+    { value: 'ends-with', label: 'Ends with' },
+    { value: 'regex', label: 'Regular expression' },
+];
+
+function normalizeSerializedRule(rule: SerializedFrontmatterRule): SerializedFrontmatterRule {
+    const matchType: FrontmatterMatchType = rule.matchType ?? (rule.isRegex ? 'regex' : 'equals');
+    const normalized: SerializedFrontmatterRule = {
+        ...rule,
+        matchType,
+        key: rule.key ?? '',
+        value: rule.value ?? '',
+        destination: rule.destination ?? '',
+    };
+    if (matchType === 'regex') {
+        normalized.isRegex = true;
+        normalized.flags = rule.flags ?? '';
+    } else {
+        delete normalized.isRegex;
+        if ('flags' in normalized) {
+            delete normalized.flags;
+        }
+    }
+    return normalized;
 }
 
 export default class VaultOrganizer extends Plugin {
@@ -80,7 +110,7 @@ export default class VaultOrganizer extends Plugin {
     async loadSettings() {
         const loaded = await this.loadData();
         const rules = Array.isArray(loaded?.rules)
-            ? [...loaded.rules]
+            ? loaded.rules.map(normalizeSerializedRule)
             : [];
         this.settings = {
             ...DEFAULT_SETTINGS,
@@ -90,7 +120,9 @@ export default class VaultOrganizer extends Plugin {
     }
 
     async saveSettings() {
-        await this.saveData(this.settings);
+        const normalizedRules = this.settings.rules.map(normalizeSerializedRule);
+        this.settings.rules = normalizedRules;
+        await this.saveData({ ...this.settings, rules: normalizedRules });
     }
 
     updateRulesFromSettings() {
@@ -308,8 +340,10 @@ class RuleSettingTab extends PluginSettingTab {
         containerEl.empty();
         this.refreshAggregatedTags();
         this.refreshFrontmatterKeys();
+        this.plugin.settings.rules = this.plugin.settings.rules.map(normalizeSerializedRule);
 
         this.plugin.settings.rules.forEach((rule, index) => {
+            const currentMatchType: FrontmatterMatchType = rule.matchType ?? 'equals';
             const setting = new Setting(containerEl)
                 .setName(`Rule ${index + 1}`)
                 .setDesc('Destination folder is required before the rule can move files.');
@@ -407,20 +441,44 @@ class RuleSettingTab extends PluginSettingTab {
                         currentRule.destination = value;
                         this.scheduleSaveOnly();
                     }));
-            setting.addToggle(toggle =>
-                toggle
-                    .setTooltip('Treat value as a regular expression')
-                    .setValue(rule.isRegex ?? false)
+            let flagsTextComponent: TextComponent | undefined;
+            const updateRegexControlsVisibility = () => {
+                const currentRule = this.plugin.settings.rules[index];
+                const isRegex = (currentRule?.matchType ?? 'equals') === 'regex';
+                if (flagsTextComponent) {
+                    flagsTextComponent.inputEl.toggleAttribute('disabled', !isRegex);
+                    flagsTextComponent.inputEl.disabled = !isRegex;
+                    flagsTextComponent.inputEl.style.display = isRegex ? '' : 'none';
+                }
+            };
+            setting.addDropdown(dropdown => {
+                dropdown.selectEl.setAttribute('aria-label', 'Match type');
+                MATCH_TYPE_OPTIONS.forEach(option => dropdown.addOption(option.value, option.label));
+                dropdown
+                    .setValue(currentMatchType)
                     .onChange(async (value) => {
                         const currentRule = this.plugin.settings.rules[index];
                         if (!currentRule) {
                             return;
                         }
-                        currentRule.isRegex = value;
+                        currentRule.matchType = value as FrontmatterMatchType;
+                        if (value === 'regex') {
+                            currentRule.isRegex = true;
+                            currentRule.flags = currentRule.flags ?? '';
+                        } else {
+                            delete currentRule.isRegex;
+                            if ('flags' in currentRule) {
+                                delete currentRule.flags;
+                            }
+                        }
+                        updateRegexControlsVisibility();
                         this.cancelPendingSaveOnly();
                         await this.plugin.saveSettingsAndRefreshRules();
-                    }));
-            setting.addText(text =>
+                        updateRegexControlsVisibility();
+                    });
+            });
+            setting.addText(text => {
+                flagsTextComponent = text;
                 text
                     .setPlaceholder('flags')
                     .setValue(rule.flags ?? '')
@@ -429,9 +487,13 @@ class RuleSettingTab extends PluginSettingTab {
                         if (!currentRule) {
                             return;
                         }
-                        currentRule.flags = value;
-                        this.scheduleSaveOnly();
-                    }));
+                        if (currentRule.matchType === 'regex') {
+                            currentRule.flags = value;
+                            this.scheduleSaveOnly();
+                        }
+                    });
+            });
+            updateRegexControlsVisibility();
             setting.addToggle(toggle =>
                 toggle
                     .setTooltip('Enable debug mode')
@@ -463,7 +525,7 @@ class RuleSettingTab extends PluginSettingTab {
                 btn
                     .setButtonText('Add Rule')
                     .onClick(async () => {
-                        this.plugin.settings.rules.push({ key: '', value: '', destination: '', isRegex: false, flags: '', debug: false });
+                        this.plugin.settings.rules.push({ key: '', value: '', destination: '', matchType: 'equals', debug: false });
                         this.cancelPendingSaveOnly();
                         await this.plugin.saveSettingsWithoutReorganizing();
                         this.display();

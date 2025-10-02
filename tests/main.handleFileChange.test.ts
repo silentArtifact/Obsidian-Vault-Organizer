@@ -73,6 +73,10 @@ jest.mock('obsidian', () => {
       addToggle() { return this; }
       addButton() { return this; }
     },
+    FuzzySuggestModal: class {
+      constructor(_app: any) {}
+      open() {}
+    },
     TAbstractFile: class {},
     debounce,
   };

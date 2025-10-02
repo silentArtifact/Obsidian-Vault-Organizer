@@ -8,7 +8,7 @@ import {
 describe('Frontmatter rule serialization', () => {
   it('round-trips plain string rules', () => {
     const rules: FrontmatterRule[] = [
-      { key: 'tag', value: 'journal', destination: 'Journal' }
+      { key: 'tag', matchType: 'equals', value: 'journal', destination: 'Journal' }
     ];
     const serialized = serializeFrontmatterRules(rules);
     const result = deserializeFrontmatterRules(serialized);
@@ -18,7 +18,7 @@ describe('Frontmatter rule serialization', () => {
 
   it('round-trips regex rules with flags', () => {
     const rules: FrontmatterRule[] = [
-      { key: 'tag', value: /journal/i, destination: 'Journal' }
+      { key: 'tag', matchType: 'regex', value: /journal/i, destination: 'Journal' }
     ];
     const serialized = serializeFrontmatterRules(rules);
     const result = deserializeFrontmatterRules(serialized);
@@ -28,14 +28,16 @@ describe('Frontmatter rule serialization', () => {
     const regex = rule.value as RegExp;
     expect(regex.source).toBe('journal');
     expect(regex.flags).toBe('i');
+    expect(rule.matchType).toBe('regex');
   });
 
   it('preserves debug field during round-trip', () => {
     const rules: FrontmatterRule[] = [
-      { key: 'tag', value: 'journal', destination: 'Journal', debug: true }
+      { key: 'tag', matchType: 'equals', value: 'journal', destination: 'Journal', debug: true }
     ];
     const result = deserializeFrontmatterRules(serializeFrontmatterRules(rules));
     expect(result.rules[0].debug).toBe(true);
+    expect(result.rules[0].matchType).toBe('equals');
   });
 
   it('retains regex metadata when round-tripping serialized data', () => {
@@ -44,7 +46,7 @@ describe('Frontmatter rule serialization', () => {
     ];
     const deserialized = deserializeFrontmatterRules(serialized);
     const result = serializeFrontmatterRules(deserialized.rules);
-    expect(result).toEqual(serialized);
+    expect(result).toEqual([{ key: 'tag', matchType: 'regex', value: 'journal', destination: 'Journal', isRegex: true, flags: 'i', debug: true }]);
   });
 
   it('ignores malformed regex data during deserialization', () => {
@@ -56,11 +58,23 @@ describe('Frontmatter rule serialization', () => {
       const result = deserializeFrontmatterRules(malformed);
       expect(result.rules).toHaveLength(0);
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].rule).toEqual(malformed[0]);
+      expect(result.errors[0].rule).toEqual({ ...malformed[0], matchType: 'regex' });
       expect(result.errors[0].message).toBeDefined();
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to deserialize regex'));
     } finally {
       warnSpy.mockRestore();
     }
+  });
+
+  it('supports non-regex match types', () => {
+    const serialized: SerializedFrontmatterRule[] = [
+      { key: 'tag', value: 'jour', destination: 'Journal', matchType: 'contains' },
+      { key: 'tag', value: 'Jour', destination: 'Journal', matchType: 'starts-with' },
+      { key: 'tag', value: 'nal', destination: 'Journal', matchType: 'ends-with' },
+    ];
+    const deserialized = deserializeFrontmatterRules(serialized);
+    expect(deserialized.rules.map(rule => rule.matchType)).toEqual(['contains', 'starts-with', 'ends-with']);
+    const reserialized = serializeFrontmatterRules(deserialized.rules);
+    expect(reserialized).toEqual(serialized);
   });
 });
