@@ -9,6 +9,7 @@ Each rule targets a single frontmatter key and determines what to do when the no
 - **Key** – the name of the frontmatter property to inspect (for example `status`, `tags`, or `type`).
 - **Value** – either a literal string that must match exactly or a regular expression (enable **Regex** to switch modes). Frontmatter arrays are supported; the rule matches if *any* element satisfies the value check.
 - **Destination** – the folder path (relative to the vault root) where matching notes should live. Missing folders are created on demand when the rule runs.
+- **Active** – rules start disabled so you can finish configuring them safely. Flip the toggle to enable a rule once it’s ready to run.
 - **Debug** – when enabled the plugin only reports where the note *would* move and leaves it in place, which is useful when testing a new rule.
 
 Rules are evaluated in the order they appear in the settings tab; the first matching rule wins. Notes without matching rules are left untouched.
@@ -18,8 +19,9 @@ Rules are evaluated in the order they appear in the settings tab; the first matc
 1. Open **Settings → Community Plugins → Vault Organizer**.
 2. Use **Add Rule** to create a new entry or edit the inputs beside an existing rule.
 3. Fill in the key, value, and destination. Toggle **Regex** if the value should be treated as a regular expression and supply flags such as `i` for case-insensitive matching.
-4. Toggle **Debug** while experimenting so you can confirm moves without reorganizing files immediately.
-5. Press **Apply now** (or toggle Regex/Debug) to save changes and immediately re-run the rules across your vault. Otherwise, updates are saved automatically after a short pause.
+4. When you are satisfied, flip **Activate this rule** on to begin moving notes. Leave it off while drafting so the rule cannot run prematurely.
+5. Toggle **Debug** while experimenting so you can confirm moves without reorganizing files immediately.
+6. Press **Apply now** (or toggle Regex/Activate/Debug) to save changes and immediately re-run the rules across your vault. Otherwise, updates are saved automatically after a short pause.
 
 You can also run the **Reorganize notes based on frontmatter rules** command from the command palette to apply the current rules on demand.
 

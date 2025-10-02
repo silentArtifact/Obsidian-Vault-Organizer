@@ -7,6 +7,7 @@ export interface FrontmatterRule {
     matchType: FrontmatterMatchType;
     value: string | RegExp;
     destination: string;
+    enabled?: boolean;
     debug?: boolean;
 }
 
@@ -15,6 +16,7 @@ export interface SerializedFrontmatterRule {
     matchType?: FrontmatterMatchType;
     value: string;
     destination: string;
+    enabled?: boolean;
     isRegex?: boolean;
     flags?: string;
     debug?: boolean;
@@ -27,6 +29,9 @@ export function matchFrontmatter(this: { app: App }, file: TFile, rules: Frontma
     }
 
     return rules.find(rule => {
+        if (rule.enabled === false) {
+            return false;
+        }
         const value = frontmatter[rule.key];
         if (value === undefined || value === null) {
             return false;
@@ -69,6 +74,7 @@ export function serializeFrontmatterRules(rules: FrontmatterRule[]): SerializedF
                 matchType,
                 value: pattern,
                 destination: rule.destination,
+                enabled: rule.enabled ?? false,
                 isRegex: true,
                 flags,
                 debug: rule.debug,
@@ -80,6 +86,7 @@ export function serializeFrontmatterRules(rules: FrontmatterRule[]): SerializedF
             matchType,
             value: String(rule.value),
             destination: rule.destination,
+            enabled: rule.enabled ?? false,
             debug: rule.debug,
         };
     });
@@ -118,6 +125,7 @@ export function deserializeFrontmatterRules(data: SerializedFrontmatterRule[] = 
                     matchType,
                     value: regex,
                     destination: rule.destination,
+                    enabled: rule.enabled ?? false,
                     debug: rule.debug,
                 };
                 rules.push(parsedRule);
@@ -140,6 +148,7 @@ export function deserializeFrontmatterRules(data: SerializedFrontmatterRule[] = 
                 matchType,
                 value: rule.value,
                 destination: rule.destination,
+                enabled: rule.enabled ?? false,
                 debug: rule.debug,
             };
             rules.push(parsedRule);

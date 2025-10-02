@@ -101,7 +101,7 @@ describe('handleFileChange', () => {
   let metadataChangedHandler: ((file: any) => Promise<void> | void) | undefined;
   const addRuleViaSettings = async (rule: any) => {
     plugin.settings.rules.splice(0, plugin.settings.rules.length);
-    plugin.settings.rules.push(rule);
+    plugin.settings.rules.push({ enabled: true, ...rule });
     await plugin.saveSettingsAndRefreshRules();
   };
 

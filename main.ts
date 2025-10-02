@@ -48,6 +48,7 @@ function normalizeSerializedRule(rule: SerializedFrontmatterRule): SerializedFro
         key: rule.key ?? '',
         value: rule.value ?? '',
         destination: rule.destination ?? '',
+        enabled: rule.enabled ?? false,
     };
     if (matchType === 'regex') {
         normalized.isRegex = true;
@@ -353,6 +354,28 @@ class RuleSettingTab extends PluginSettingTab {
             warningEl.style.display = 'none';
             setting.settingEl.appendChild(warningEl);
 
+            const updateEnabledState = () => {
+                const currentRule = this.plugin.settings.rules[index];
+                const isEnabled = currentRule?.enabled ?? false;
+                setting.settingEl.classList.toggle('vault-organizer-rule-disabled', !isEnabled);
+            };
+
+            setting.addToggle(toggle =>
+                toggle
+                    .setTooltip('Activate this rule')
+                    .setValue(rule.enabled ?? false)
+                    .onChange(async (value) => {
+                        const currentRule = this.plugin.settings.rules[index];
+                        if (!currentRule) {
+                            return;
+                        }
+                        currentRule.enabled = value;
+                        updateEnabledState();
+                        this.cancelPendingSaveOnly();
+                        await this.plugin.saveSettingsAndRefreshRules();
+                        updateEnabledState();
+                    }));
+
             const refreshWarning = () => {
                 const error = this.plugin.getRuleErrorForIndex(index);
                 if (error) {
@@ -518,6 +541,7 @@ class RuleSettingTab extends PluginSettingTab {
                     }));
 
             refreshWarning();
+            updateEnabledState();
         });
 
         new Setting(containerEl)
@@ -525,7 +549,7 @@ class RuleSettingTab extends PluginSettingTab {
                 btn
                     .setButtonText('Add Rule')
                     .onClick(async () => {
-                        this.plugin.settings.rules.push({ key: '', value: '', destination: '', matchType: 'equals', debug: false });
+                        this.plugin.settings.rules.push({ key: '', value: '', destination: '', matchType: 'equals', debug: false, enabled: false });
                         this.cancelPendingSaveOnly();
                         await this.plugin.saveSettingsWithoutReorganizing();
                         this.display();
@@ -552,6 +576,9 @@ class RuleSettingTab extends PluginSettingTab {
             if (!warningEl) {
                 return;
             }
+            const currentRule = this.plugin.settings.rules[index];
+            const isEnabled = currentRule?.enabled ?? false;
+            settingEl.classList.toggle('vault-organizer-rule-disabled', !isEnabled);
             const error = this.plugin.getRuleErrorForIndex(index);
             if (error) {
                 settingEl.classList.add('vault-organizer-rule-error');
