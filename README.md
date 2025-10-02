@@ -29,6 +29,7 @@ Vault Organizer listens for vault changes and applies the rules when:
 
 - A Markdown file is created.
 - A Markdown file is modified.
+- A Markdown file is renamed or moved.
 - Obsidian finishes reading updated frontmatter metadata for a Markdown file.
 
 If a matching rule has a non-empty destination and Debug is off, the plugin moves the note into that folder. When Debug is on, a notice appears instead (e.g., `DEBUG: NoteTitle would be moved to Vault/Projects/In Progress`).
