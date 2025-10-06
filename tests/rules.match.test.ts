@@ -52,6 +52,18 @@ describe('matchFrontmatter', () => {
     expect(matchFrontmatter.call({ app }, file, [rules[2]])).toEqual(rules[2]);
   });
 
+  it('does not match partial rules with empty values', () => {
+    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal-entry' } });
+    const baseRule = { key: 'tag', value: '', destination: 'Invalid', enabled: true } as const;
+    const containsRule: FrontmatterRule = { ...baseRule, matchType: 'contains' };
+    const startsWithRule: FrontmatterRule = { ...baseRule, matchType: 'starts-with' };
+    const endsWithRule: FrontmatterRule = { ...baseRule, matchType: 'ends-with' };
+
+    expect(matchFrontmatter.call({ app }, file, [containsRule])).toBeUndefined();
+    expect(matchFrontmatter.call({ app }, file, [startsWithRule])).toBeUndefined();
+    expect(matchFrontmatter.call({ app }, file, [endsWithRule])).toBeUndefined();
+  });
+
   it('returns undefined when no frontmatter or missing keys', () => {
     metadataCache.getFileCache.mockReturnValue({});
     const rules: FrontmatterRule[] = [

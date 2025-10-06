@@ -384,9 +384,18 @@ class RuleSettingTab extends PluginSettingTab {
 
             const refreshWarning = () => {
                 const error = this.plugin.getRuleErrorForIndex(index);
+                const currentRule = this.plugin.settings.rules[index];
+                const matchType = currentRule?.matchType ?? 'equals';
+                const requiresValue = matchType === 'contains' || matchType === 'starts-with' || matchType === 'ends-with';
+                const hasValue = typeof currentRule?.value === 'string' && currentRule.value.trim().length > 0;
+
                 if (error) {
                     setting.settingEl.classList.add('vault-organizer-rule-error');
                     warningEl.textContent = `Invalid regular expression: ${error.message}`;
+                    warningEl.style.display = '';
+                } else if (requiresValue && !hasValue) {
+                    setting.settingEl.classList.add('vault-organizer-rule-error');
+                    warningEl.textContent = 'Value is required for contains/starts-with/ends-with rules.';
                     warningEl.style.display = '';
                 } else {
                     setting.settingEl.classList.remove('vault-organizer-rule-error');
@@ -439,6 +448,7 @@ class RuleSettingTab extends PluginSettingTab {
                         }
                         currentRule.value = value;
                         this.scheduleSaveOnly();
+                        refreshWarning();
                     });
             });
             setting.addExtraButton(button =>
@@ -504,6 +514,7 @@ class RuleSettingTab extends PluginSettingTab {
                         this.cancelPendingSaveOnly();
                         await this.plugin.saveSettingsAndRefreshRules();
                         updateRegexControlsVisibility();
+                        refreshWarning();
                     });
             });
             setting.addText(text => {
@@ -586,9 +597,17 @@ class RuleSettingTab extends PluginSettingTab {
             const isEnabled = currentRule?.enabled ?? false;
             settingEl.classList.toggle('vault-organizer-rule-disabled', !isEnabled);
             const error = this.plugin.getRuleErrorForIndex(index);
+            const matchType = currentRule?.matchType ?? 'equals';
+            const requiresValue = matchType === 'contains' || matchType === 'starts-with' || matchType === 'ends-with';
+            const hasValue = typeof currentRule?.value === 'string' && currentRule.value.trim().length > 0;
+
             if (error) {
                 settingEl.classList.add('vault-organizer-rule-error');
                 warningEl.textContent = `Invalid regular expression: ${error.message}`;
+                warningEl.style.display = '';
+            } else if (requiresValue && !hasValue) {
+                settingEl.classList.add('vault-organizer-rule-error');
+                warningEl.textContent = 'Value is required for contains/starts-with/ends-with rules.';
                 warningEl.style.display = '';
             } else {
                 settingEl.classList.remove('vault-organizer-rule-error');
