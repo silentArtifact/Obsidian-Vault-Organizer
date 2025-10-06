@@ -53,13 +53,17 @@ export function matchFrontmatter(this: { app: App }, file: TFile, rules: Frontma
         }
 
         const ruleCandidates = getRuleCandidates(String(rule.value), isArrayValue);
-        if (!ruleCandidates.length) {
+        const normalizedCandidates =
+            matchType === 'contains' || matchType === 'starts-with' || matchType === 'ends-with'
+                ? ruleCandidates.filter(candidate => candidate.length > 0)
+                : ruleCandidates;
+        if (!normalizedCandidates.length) {
             return false;
         }
 
         return values.some(item => {
             const valueStr = String(item);
-            return ruleCandidates.some(candidate => matchByType(valueStr, candidate, matchType));
+            return normalizedCandidates.some(candidate => matchByType(valueStr, candidate, matchType));
         });
     });
 }
