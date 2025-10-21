@@ -20,9 +20,9 @@ import {
     FrontmatterRuleDeserializationError,
     matchFrontmatter,
     serializeFrontmatterRules,
+    requiresValue,
+    hasValidValue,
 } from './src/rules';
-
-// Remember to rename these classes and interfaces!
 
 interface VaultOrganizerSettings {
     rules: SerializedFrontmatterRule[];
@@ -386,14 +386,14 @@ class RuleSettingTab extends PluginSettingTab {
                 const error = this.plugin.getRuleErrorForIndex(index);
                 const currentRule = this.plugin.settings.rules[index];
                 const matchType = currentRule?.matchType ?? 'equals';
-                const requiresValue = matchType === 'contains' || matchType === 'starts-with' || matchType === 'ends-with';
-                const hasValue = typeof currentRule?.value === 'string' && currentRule.value.trim().length > 0;
+                const ruleRequiresValue = requiresValue(matchType);
+                const hasValue = currentRule ? hasValidValue(currentRule) : false;
 
                 if (error) {
                     setting.settingEl.classList.add('vault-organizer-rule-error');
                     warningEl.textContent = `Invalid regular expression: ${error.message}`;
                     warningEl.style.display = '';
-                } else if (requiresValue && !hasValue) {
+                } else if (ruleRequiresValue && !hasValue) {
                     setting.settingEl.classList.add('vault-organizer-rule-error');
                     warningEl.textContent = 'Value is required for contains/starts-with/ends-with rules.';
                     warningEl.style.display = '';
@@ -598,14 +598,14 @@ class RuleSettingTab extends PluginSettingTab {
             settingEl.classList.toggle('vault-organizer-rule-disabled', !isEnabled);
             const error = this.plugin.getRuleErrorForIndex(index);
             const matchType = currentRule?.matchType ?? 'equals';
-            const requiresValue = matchType === 'contains' || matchType === 'starts-with' || matchType === 'ends-with';
-            const hasValue = typeof currentRule?.value === 'string' && currentRule.value.trim().length > 0;
+            const ruleRequiresValue = requiresValue(matchType);
+            const hasValue = currentRule ? hasValidValue(currentRule) : false;
 
             if (error) {
                 settingEl.classList.add('vault-organizer-rule-error');
                 warningEl.textContent = `Invalid regular expression: ${error.message}`;
                 warningEl.style.display = '';
-            } else if (requiresValue && !hasValue) {
+            } else if (ruleRequiresValue && !hasValue) {
                 settingEl.classList.add('vault-organizer-rule-error');
                 warningEl.textContent = 'Value is required for contains/starts-with/ends-with rules.';
                 warningEl.style.display = '';
