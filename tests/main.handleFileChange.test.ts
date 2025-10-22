@@ -65,6 +65,18 @@ jest.mock('obsidian', () => {
     TFile,
     normalizePath: (p: string) => require('path').posix.normalize(p.replace(/\\/g, '/')),
     Notice: noticeMock,
+    Modal: class {
+      app: any;
+      contentEl: any = {
+        empty: jest.fn(),
+        createEl: jest.fn(),
+        createDiv: jest.fn(),
+      };
+      open() {}
+      close() {}
+      onOpen() {}
+      onClose() {}
+    },
     PluginSettingTab: class { constructor(app: any, plugin: any) {} },
     Setting: class {
       setName() { return this; }
@@ -79,6 +91,7 @@ jest.mock('obsidian', () => {
     },
     TAbstractFile: class {},
     debounce,
+    getAllTags: jest.fn(() => []),
   };
 }, { virtual: true });
 
@@ -224,8 +237,13 @@ describe('handleFileChange', () => {
     await handle(file);
 
     expect(renameFile).toHaveBeenCalledWith(file, 'Journal/Test.md');
-    expect(Notice).toHaveBeenCalledWith('Failed to move "Test" to "Journal/Test.md": rename failed');
-    expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to handle file change', renameError);
+    // Updated to match new error categorization format
+    expect(Notice).toHaveBeenCalledWith('Failed to move "Temp/Test.md": rename failed.');
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[Vault Organizer]'),
+      expect.anything(),
+      expect.anything()
+    );
 
     consoleErrorSpy.mockRestore();
   });
