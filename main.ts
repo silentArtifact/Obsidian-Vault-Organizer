@@ -1,6 +1,7 @@
 import {
     App,
     FuzzySuggestModal,
+    Modal,
     Plugin,
     PluginSettingTab,
     Setting,
@@ -242,6 +243,47 @@ export default class VaultOrganizer extends Plugin {
             await this.applyRulesToFile(file);
         }
     }
+
+    testAllRules(): Array<{ file: TFile; currentPath: string; newPath: string; ruleIndex: number }> {
+        const markdownFiles = this.app.vault.getMarkdownFiles?.() || [];
+        const results: Array<{ file: TFile; currentPath: string; newPath: string; ruleIndex: number }> = [];
+
+        for (const file of markdownFiles) {
+            const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+            if (!frontmatter) {
+                continue;
+            }
+
+            const ruleIndex = this.rules.findIndex(rule => {
+                if (rule.enabled === false) {
+                    return false;
+                }
+                return matchFrontmatter.call(this, file, [rule]);
+            });
+
+            if (ruleIndex === -1) {
+                continue;
+            }
+
+            const rule = this.rules[ruleIndex];
+            const trimmedDestination = rule.destination.trim();
+            if (!trimmedDestination) {
+                continue;
+            }
+
+            const newPath = normalizePath(`${trimmedDestination}/${file.name}`);
+            if (file.path !== newPath) {
+                results.push({
+                    file,
+                    currentPath: file.path,
+                    newPath,
+                    ruleIndex,
+                });
+            }
+        }
+
+        return results;
+    }
 }
 
 class RuleSettingTab extends PluginSettingTab {
@@ -382,6 +424,40 @@ class RuleSettingTab extends PluginSettingTab {
                         updateEnabledState();
                     }));
 
+            // Add up arrow button
+            setting.addExtraButton(button =>
+                button
+                    .setIcon('arrow-up')
+                    .setTooltip('Move rule up')
+                    .setDisabled(index === 0)
+                    .onClick(async () => {
+                        if (index === 0) return;
+                        // Swap with previous rule
+                        const temp = this.plugin.settings.rules[index];
+                        this.plugin.settings.rules[index] = this.plugin.settings.rules[index - 1];
+                        this.plugin.settings.rules[index - 1] = temp;
+                        this.cancelPendingSaveOnly();
+                        await this.plugin.saveSettingsWithoutReorganizing();
+                        this.display();
+                    }));
+
+            // Add down arrow button
+            setting.addExtraButton(button =>
+                button
+                    .setIcon('arrow-down')
+                    .setTooltip('Move rule down')
+                    .setDisabled(index === this.plugin.settings.rules.length - 1)
+                    .onClick(async () => {
+                        if (index === this.plugin.settings.rules.length - 1) return;
+                        // Swap with next rule
+                        const temp = this.plugin.settings.rules[index];
+                        this.plugin.settings.rules[index] = this.plugin.settings.rules[index + 1];
+                        this.plugin.settings.rules[index + 1] = temp;
+                        this.cancelPendingSaveOnly();
+                        await this.plugin.saveSettingsWithoutReorganizing();
+                        this.display();
+                    }));
+
             const refreshWarning = () => {
                 const error = this.plugin.getRuleErrorForIndex(index);
                 const currentRule = this.plugin.settings.rules[index];
@@ -481,6 +557,7 @@ class RuleSettingTab extends PluginSettingTab {
                         this.scheduleSaveOnly();
                     }));
             let flagsTextComponent: TextComponent | undefined;
+            let caseInsensitiveToggleComponent: any;
             const updateRegexControlsVisibility = () => {
                 const currentRule = this.plugin.settings.rules[index];
                 const isRegex = (currentRule?.matchType ?? 'equals') === 'regex';
@@ -488,6 +565,9 @@ class RuleSettingTab extends PluginSettingTab {
                     flagsTextComponent.inputEl.toggleAttribute('disabled', !isRegex);
                     flagsTextComponent.inputEl.disabled = !isRegex;
                     flagsTextComponent.inputEl.style.display = isRegex ? '' : 'none';
+                }
+                if (caseInsensitiveToggleComponent) {
+                    caseInsensitiveToggleComponent.toggleEl.style.display = isRegex ? 'none' : '';
                 }
             };
             setting.addDropdown(dropdown => {
@@ -534,6 +614,23 @@ class RuleSettingTab extends PluginSettingTab {
                     });
             });
             updateRegexControlsVisibility();
+
+            setting.addToggle(toggle => {
+                caseInsensitiveToggleComponent = toggle;
+                toggle
+                    .setTooltip('Case insensitive matching')
+                    .setValue(rule.caseInsensitive ?? false)
+                    .onChange(async (value) => {
+                        const currentRule = this.plugin.settings.rules[index];
+                        if (!currentRule) {
+                            return;
+                        }
+                        currentRule.caseInsensitive = value;
+                        this.cancelPendingSaveOnly();
+                        await this.plugin.saveSettingsAndRefreshRules();
+                    });
+            });
+
             setting.addToggle(toggle =>
                 toggle
                     .setTooltip('Enable debug mode')
@@ -579,6 +676,16 @@ class RuleSettingTab extends PluginSettingTab {
                     .onClick(async () => {
                         this.cancelPendingSaveOnly();
                         await this.plugin.saveSettingsAndRefreshRules();
+                    }))
+            .addButton(btn =>
+                btn
+                    .setButtonText('Test All Rules')
+                    .setTooltip('Preview what moves would be made without actually moving files')
+                    .onClick(async () => {
+                        this.cancelPendingSaveOnly();
+                        await this.plugin.saveSettingsWithoutReorganizing();
+                        const results = this.plugin.testAllRules();
+                        new TestAllRulesModal(this.app, results, this.plugin.settings.rules).open();
                     }));
     }
 
@@ -651,5 +758,69 @@ class RuleFrontmatterKeyPickerModal extends FuzzySuggestModal<string> {
 
     onChooseItem(key: string): void {
         this.onSelect(key);
+    }
+}
+
+class TestAllRulesModal extends Modal {
+    constructor(
+        app: App,
+        private readonly results: Array<{ file: TFile; currentPath: string; newPath: string; ruleIndex: number }>,
+        private readonly rules: SerializedFrontmatterRule[]
+    ) {
+        super(app);
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+
+        contentEl.createEl('h2', { text: 'Test All Rules - Preview' });
+
+        if (this.results.length === 0) {
+            contentEl.createEl('p', { text: 'No files would be moved. All files are either already in the correct location or have no matching rules.' });
+        } else {
+            contentEl.createEl('p', { text: `${this.results.length} file(s) would be moved:` });
+
+            const resultsContainer = contentEl.createDiv({ cls: 'vault-organizer-test-results' });
+            resultsContainer.style.maxHeight = '400px';
+            resultsContainer.style.overflowY = 'auto';
+            resultsContainer.style.marginTop = '1em';
+
+            this.results.forEach((result, index) => {
+                const resultEl = resultsContainer.createDiv({ cls: 'vault-organizer-test-result-item' });
+                resultEl.style.marginBottom = '1em';
+                resultEl.style.padding = '0.5em';
+                resultEl.style.border = '1px solid var(--background-modifier-border)';
+                resultEl.style.borderRadius = '4px';
+
+                const fileEl = resultEl.createDiv();
+                fileEl.createEl('strong', { text: 'File: ' });
+                fileEl.createSpan({ text: result.file.basename });
+
+                const fromEl = resultEl.createDiv();
+                fromEl.createEl('strong', { text: 'From: ' });
+                fromEl.createSpan({ text: result.currentPath });
+
+                const toEl = resultEl.createDiv();
+                toEl.createEl('strong', { text: 'To: ' });
+                toEl.createSpan({ text: result.newPath });
+
+                const ruleEl = resultEl.createDiv();
+                ruleEl.createEl('strong', { text: 'Rule: ' });
+                ruleEl.createSpan({ text: `Rule ${result.ruleIndex + 1} (${this.rules[result.ruleIndex]?.key || 'unknown'})` });
+            });
+        }
+
+        const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
+        buttonContainer.style.marginTop = '1.5em';
+        buttonContainer.style.textAlign = 'right';
+
+        const closeButton = buttonContainer.createEl('button', { text: 'Close' });
+        closeButton.onclick = () => this.close();
+    }
+
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
     }
 }
