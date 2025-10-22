@@ -9,6 +9,7 @@ export interface FrontmatterRule {
     destination: string;
     enabled?: boolean;
     debug?: boolean;
+    caseInsensitive?: boolean;
 }
 
 export interface SerializedFrontmatterRule {
@@ -20,6 +21,7 @@ export interface SerializedFrontmatterRule {
     isRegex?: boolean;
     flags?: string;
     debug?: boolean;
+    caseInsensitive?: boolean;
 }
 
 /**
@@ -56,10 +58,11 @@ export function matchFrontmatter(this: { app: App }, file: TFile, rules: Frontma
             if (!(rule.value instanceof RegExp)) {
                 return false;
             }
+            const regex = rule.value;
             return values.some(item => {
                 const valueStr = String(item);
-                rule.value.lastIndex = 0;
-                return rule.value.test(valueStr);
+                regex.lastIndex = 0;
+                return regex.test(valueStr);
             });
         }
 
@@ -74,7 +77,7 @@ export function matchFrontmatter(this: { app: App }, file: TFile, rules: Frontma
 
         return values.some(item => {
             const valueStr = String(item);
-            return normalizedCandidates.some(candidate => matchByType(valueStr, candidate, matchType));
+            return normalizedCandidates.some(candidate => matchByType(valueStr, candidate, matchType, rule.caseInsensitive));
         });
     });
 }
@@ -122,19 +125,23 @@ function getRuleCandidates(value: string, shouldExpand: boolean): string[] {
  * @param value - The frontmatter value to test
  * @param candidate - The candidate string from the rule to match against
  * @param matchType - The type of matching to perform
+ * @param caseInsensitive - Whether to perform case-insensitive matching (default: false)
  * @returns true if the value matches according to the match type, false otherwise
  */
-function matchByType(value: string, candidate: string, matchType: FrontmatterMatchType): boolean {
+function matchByType(value: string, candidate: string, matchType: FrontmatterMatchType, caseInsensitive?: boolean): boolean {
+    const val = caseInsensitive ? value.toLowerCase() : value;
+    const cand = caseInsensitive ? candidate.toLowerCase() : candidate;
+
     switch (matchType) {
         case 'contains':
-            return value.includes(candidate);
+            return val.includes(cand);
         case 'starts-with':
-            return value.startsWith(candidate);
+            return val.startsWith(cand);
         case 'ends-with':
-            return value.endsWith(candidate);
+            return val.endsWith(cand);
         case 'equals':
         default:
-            return value === candidate;
+            return val === cand;
     }
 }
 
@@ -161,6 +168,7 @@ export function serializeFrontmatterRules(rules: FrontmatterRule[]): SerializedF
                 isRegex: true,
                 flags,
                 debug: rule.debug,
+                caseInsensitive: rule.caseInsensitive,
             };
         }
 
@@ -171,6 +179,7 @@ export function serializeFrontmatterRules(rules: FrontmatterRule[]): SerializedF
             destination: rule.destination,
             enabled: rule.enabled ?? false,
             debug: rule.debug,
+            caseInsensitive: rule.caseInsensitive,
         };
     });
 }
@@ -244,6 +253,7 @@ export function deserializeFrontmatterRules(data: SerializedFrontmatterRule[] = 
                     destination: rule.destination,
                     enabled: rule.enabled ?? false,
                     debug: rule.debug,
+                    caseInsensitive: rule.caseInsensitive,
                 };
                 rules.push(parsedRule);
                 successes.push({ index, rule: parsedRule });
@@ -267,6 +277,7 @@ export function deserializeFrontmatterRules(data: SerializedFrontmatterRule[] = 
                 destination: rule.destination,
                 enabled: rule.enabled ?? false,
                 debug: rule.debug,
+                caseInsensitive: rule.caseInsensitive,
             };
             rules.push(parsedRule);
             successes.push({ index, rule: parsedRule });
