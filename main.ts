@@ -24,6 +24,14 @@ import {
     requiresValue,
     hasValidValue,
 } from './src/rules';
+import {
+    VaultOrganizerError,
+    categorizeError,
+} from './src/errors';
+import {
+    validateDestinationPath,
+    validatePath,
+} from './src/pathSanitization';
 
 interface VaultOrganizerSettings {
     rules: SerializedFrontmatterRule[];
@@ -171,7 +179,18 @@ export default class VaultOrganizer extends Plugin {
             return;
         }
 
-        const segments = normalizePath(folderPath).split('/').filter(Boolean);
+        // Validate the folder path before attempting to create it
+        const validation = validatePath(folderPath, {
+            allowEmpty: false,
+            allowAbsolute: false,
+        });
+
+        if (!validation.valid) {
+            throw validation.error;
+        }
+
+        const sanitizedPath = validation.sanitizedPath!;
+        const segments = sanitizedPath.split('/').filter(Boolean);
         if (!segments.length) {
             return;
         }
@@ -183,7 +202,13 @@ export default class VaultOrganizer extends Plugin {
                 continue;
             }
 
-            await this.app.vault.createFolder(currentPath);
+            try {
+                await this.app.vault.createFolder(currentPath);
+            } catch (err) {
+                // Categorize the error for better user feedback
+                const categorized = categorizeError(err, currentPath);
+                throw categorized;
+            }
         }
     }
 
@@ -210,26 +235,57 @@ export default class VaultOrganizer extends Plugin {
                 return;
             }
 
-            const destinationFolder = normalizePath(trimmedDestination);
-            const newPath = normalizePath(`${trimmedDestination}/${file.name}`);
+            // Validate the destination path before attempting to move
+            const destinationValidation = validateDestinationPath(trimmedDestination);
+            if (!destinationValidation.valid) {
+                throw destinationValidation.error;
+            }
+
+            const destinationFolder = destinationValidation.sanitizedPath!;
+
+            // Validate the full destination path (folder + filename)
+            const fullPathValidation = validatePath(`${destinationFolder}/${file.name}`, {
+                allowEmpty: false,
+                allowAbsolute: false,
+            });
+
+            if (!fullPathValidation.valid) {
+                throw fullPathValidation.error;
+            }
+
+            const newPath = fullPathValidation.sanitizedPath!;
             intendedDestination = newPath;
+
             if (file.path === newPath) {
                 return;
             }
 
             if (rule.debug) {
                 const vaultName = this.app.vault.getName();
-                new Notice(`DEBUG: ${file.basename} would be moved to ${vaultName}/${trimmedDestination}`);
+                new Notice(`DEBUG: ${file.basename} would be moved to ${vaultName}/${destinationFolder}`);
                 return;
             }
 
             await this.ensureFolderExists(destinationFolder);
-            await this.app.fileManager.renameFile(file, newPath);
+
+            try {
+                await this.app.fileManager.renameFile(file, newPath);
+            } catch (err) {
+                // Categorize the rename error for better user feedback
+                const categorized = categorizeError(err, file.path, newPath);
+                throw categorized;
+            }
         } catch (err) {
-            const reason = err instanceof Error ? err.message : String(err);
-            const destination = intendedDestination ?? 'the configured destination';
-            new Notice(`Failed to move "${noteName}" to "${destination}": ${reason}`);
-            console.error('Failed to handle file change', err);
+            // Handle categorized errors with user-friendly messages
+            if (err instanceof VaultOrganizerError) {
+                new Notice(err.getUserMessage());
+                console.error(`[Vault Organizer] ${err.name}:`, err.message, err);
+            } else {
+                // Fallback for unexpected errors
+                const categorized = categorizeError(err, file.path, intendedDestination);
+                new Notice(categorized.getUserMessage());
+                console.error('[Vault Organizer] Unexpected error:', err);
+            }
         }
     }
 

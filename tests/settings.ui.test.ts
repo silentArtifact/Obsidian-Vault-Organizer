@@ -57,6 +57,7 @@ jest.mock('obsidian', () => {
         setTooltip: (t: string) => { input.title = t; return api; },
         setValue: (v: boolean) => { input.checked = v; return api; },
         onChange: (fn: (v: boolean) => void) => { input.addEventListener('change', e => fn((e.target as HTMLInputElement).checked)); return api; },
+        toggleEl: input,
       };
       cb(api);
       return this;
@@ -84,6 +85,7 @@ jest.mock('obsidian', () => {
       this.settingEl.appendChild(button);
       const api = {
         setButtonText: (t: string) => { button.textContent = t; return api; },
+        setTooltip: (t: string) => { button.title = t; return api; },
         onClick: (fn: () => void) => { button.addEventListener('click', fn); return api; },
       };
       cb(api);
@@ -96,6 +98,7 @@ jest.mock('obsidian', () => {
       const api = {
         setIcon: (_icon: string) => api,
         setTooltip: (t: string) => { button.title = t; return api; },
+        setDisabled: (d: boolean) => { button.disabled = d; return api; },
         onClick: (fn: () => void) => { button.addEventListener('click', fn); return api; },
         buttonEl: button,
       };
@@ -159,7 +162,29 @@ jest.mock('obsidian', () => {
     return debounced;
   };
 
-  return { Plugin, PluginSettingTab, Setting, Notice, debounce, FuzzySuggestModal, getAllTags };
+  class Modal {
+    app: any;
+    contentEl: any = {
+      empty: jest.fn(),
+      createEl: jest.fn(() => ({
+        createEl: jest.fn(),
+        createSpan: jest.fn(),
+        createDiv: jest.fn(),
+      })),
+      createDiv: jest.fn(() => ({
+        style: {},
+        createEl: jest.fn(),
+        createSpan: jest.fn(),
+        createDiv: jest.fn(),
+      })),
+    };
+    open() {}
+    close() {}
+    onOpen() {}
+    onClose() {}
+  }
+
+  return { Plugin, PluginSettingTab, Setting, Notice, debounce, FuzzySuggestModal, getAllTags, Modal };
 }, { virtual: true });
 
 import VaultOrganizer from '../main';
