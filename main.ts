@@ -9,7 +9,6 @@ import {
     TFile,
     debounce,
     getAllTags,
-    normalizePath,
     Notice,
 } from 'obsidian';
 import type { TextComponent } from 'obsidian';
@@ -25,6 +24,7 @@ import {
     hasValidValue,
 } from './src/rules';
 import {
+    InvalidPathError,
     VaultOrganizerError,
     categorizeError,
 } from './src/errors';
@@ -39,7 +39,16 @@ interface VaultOrganizerSettings {
 
 const DEFAULT_SETTINGS: VaultOrganizerSettings = {
     rules: [],
-}
+};
+
+type RuleTestResult = {
+    file: TFile;
+    currentPath: string;
+    ruleIndex: number;
+    newPath?: string;
+    warnings?: string[];
+    error?: InvalidPathError;
+};
 
 const MATCH_TYPE_OPTIONS: { value: FrontmatterMatchType; label: string }[] = [
     { value: 'equals', label: 'Equals' },
@@ -300,9 +309,9 @@ export default class VaultOrganizer extends Plugin {
         }
     }
 
-    testAllRules(): Array<{ file: TFile; currentPath: string; newPath: string; ruleIndex: number }> {
+    testAllRules(): RuleTestResult[] {
         const markdownFiles = this.app.vault.getMarkdownFiles?.() || [];
-        const results: Array<{ file: TFile; currentPath: string; newPath: string; ruleIndex: number }> = [];
+        const results: RuleTestResult[] = [];
 
         for (const file of markdownFiles) {
             const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
@@ -327,13 +336,53 @@ export default class VaultOrganizer extends Plugin {
                 continue;
             }
 
-            const newPath = normalizePath(`${trimmedDestination}/${file.name}`);
-            if (file.path !== newPath) {
+            const destinationValidation = validateDestinationPath(trimmedDestination);
+            if (!destinationValidation.valid) {
                 results.push({
                     file,
                     currentPath: file.path,
-                    newPath,
                     ruleIndex,
+                    error: destinationValidation.error,
+                    warnings: destinationValidation.warnings,
+                });
+                continue;
+            }
+
+            const sanitizedDestination = destinationValidation.sanitizedPath ?? '';
+            const combinedPath = sanitizedDestination ? `${sanitizedDestination}/${file.name}` : file.name;
+            const newPathValidation = validatePath(combinedPath, {
+                allowEmpty: false,
+                allowAbsolute: false,
+                checkReservedNames: true,
+            });
+
+            if (!newPathValidation.valid) {
+                const warnings = [
+                    ...(destinationValidation.warnings ?? []),
+                    ...(newPathValidation.warnings ?? []),
+                ];
+                results.push({
+                    file,
+                    currentPath: file.path,
+                    ruleIndex,
+                    error: newPathValidation.error,
+                    warnings: warnings.length ? warnings : undefined,
+                });
+                continue;
+            }
+
+            const sanitizedNewPath = newPathValidation.sanitizedPath!;
+            if (file.path !== sanitizedNewPath) {
+                const warnings = [
+                    ...(destinationValidation.warnings ?? []),
+                    ...(newPathValidation.warnings ?? []),
+                ];
+                results.push({
+                    file,
+                    currentPath: file.path,
+                    newPath: sanitizedNewPath,
+                    ruleIndex,
+                    warnings: warnings.length ? warnings : undefined,
                 });
             }
         }
@@ -820,7 +869,7 @@ class RuleFrontmatterKeyPickerModal extends FuzzySuggestModal<string> {
 class TestAllRulesModal extends Modal {
     constructor(
         app: App,
-        private readonly results: Array<{ file: TFile; currentPath: string; newPath: string; ruleIndex: number }>,
+        private readonly results: RuleTestResult[],
         private readonly rules: SerializedFrontmatterRule[]
     ) {
         super(app);
@@ -832,39 +881,96 @@ class TestAllRulesModal extends Modal {
 
         contentEl.createEl('h2', { text: 'Test All Rules - Preview' });
 
-        if (this.results.length === 0) {
-            contentEl.createEl('p', { text: 'No files would be moved. All files are either already in the correct location or have no matching rules.' });
-        } else {
-            contentEl.createEl('p', { text: `${this.results.length} file(s) would be moved:` });
+        const validResults = this.results.filter(result => result.newPath && !result.error);
+        const invalidResults = this.results.filter(result => result.error);
 
-            const resultsContainer = contentEl.createDiv({ cls: 'vault-organizer-test-results' });
-            resultsContainer.style.maxHeight = '400px';
-            resultsContainer.style.overflowY = 'auto';
-            resultsContainer.style.marginTop = '1em';
-
-            this.results.forEach((result, index) => {
-                const resultEl = resultsContainer.createDiv({ cls: 'vault-organizer-test-result-item' });
-                resultEl.style.marginBottom = '1em';
-                resultEl.style.padding = '0.5em';
-                resultEl.style.border = '1px solid var(--background-modifier-border)';
-                resultEl.style.borderRadius = '4px';
-
-                const fileEl = resultEl.createDiv();
-                fileEl.createEl('strong', { text: 'File: ' });
-                fileEl.createSpan({ text: result.file.basename });
-
-                const fromEl = resultEl.createDiv();
-                fromEl.createEl('strong', { text: 'From: ' });
-                fromEl.createSpan({ text: result.currentPath });
-
-                const toEl = resultEl.createDiv();
-                toEl.createEl('strong', { text: 'To: ' });
-                toEl.createSpan({ text: result.newPath });
-
-                const ruleEl = resultEl.createDiv();
-                ruleEl.createEl('strong', { text: 'Rule: ' });
-                ruleEl.createSpan({ text: `Rule ${result.ruleIndex + 1} (${this.rules[result.ruleIndex]?.key || 'unknown'})` });
+        if (validResults.length === 0 && invalidResults.length === 0) {
+            contentEl.createEl('p', {
+                text: 'No files would be moved. All files are either already in the correct location or have no matching rules.',
             });
+        } else {
+            if (validResults.length) {
+                contentEl.createEl('p', { text: `${validResults.length} file(s) would be moved:` });
+
+                const resultsContainer = contentEl.createDiv({ cls: 'vault-organizer-test-results' });
+                resultsContainer.style.maxHeight = '400px';
+                resultsContainer.style.overflowY = 'auto';
+                resultsContainer.style.marginTop = '1em';
+
+                validResults.forEach(result => {
+                    const resultEl = resultsContainer.createDiv({ cls: 'vault-organizer-test-result-item' });
+                    resultEl.style.marginBottom = '1em';
+                    resultEl.style.padding = '0.5em';
+                    resultEl.style.border = '1px solid var(--background-modifier-border)';
+                    resultEl.style.borderRadius = '4px';
+
+                    const fileEl = resultEl.createDiv();
+                    fileEl.createEl('strong', { text: 'File: ' });
+                    fileEl.createSpan({ text: result.file.basename });
+
+                    const fromEl = resultEl.createDiv();
+                    fromEl.createEl('strong', { text: 'From: ' });
+                    fromEl.createSpan({ text: result.currentPath });
+
+                    const toEl = resultEl.createDiv();
+                    toEl.createEl('strong', { text: 'To: ' });
+                    toEl.createSpan({ text: result.newPath! });
+
+                    const ruleEl = resultEl.createDiv();
+                    ruleEl.createEl('strong', { text: 'Rule: ' });
+                    ruleEl.createSpan({ text: `Rule ${result.ruleIndex + 1} (${this.rules[result.ruleIndex]?.key || 'unknown'})` });
+
+                    if (result.warnings?.length) {
+                        const warningsEl = resultEl.createDiv();
+                        warningsEl.createEl('strong', { text: 'Warnings: ' });
+                        warningsEl.createSpan({ text: result.warnings.join('; ') });
+                    }
+                });
+            } else {
+                contentEl.createEl('p', {
+                    text: 'No files would be moved. All matching files are already in the correct location.',
+                });
+            }
+
+            if (invalidResults.length) {
+                contentEl.createEl('h3', { text: 'Skipped due to invalid destinations' });
+                const skippedContainer = contentEl.createDiv({ cls: 'vault-organizer-test-results' });
+                skippedContainer.style.maxHeight = '400px';
+                skippedContainer.style.overflowY = 'auto';
+                skippedContainer.style.marginTop = '1em';
+
+                invalidResults.forEach(result => {
+                    const resultEl = skippedContainer.createDiv({ cls: 'vault-organizer-test-result-item' });
+                    resultEl.style.marginBottom = '1em';
+                    resultEl.style.padding = '0.5em';
+                    resultEl.style.border = '1px solid var(--background-modifier-border)';
+                    resultEl.style.borderRadius = '4px';
+
+                    const fileEl = resultEl.createDiv();
+                    fileEl.createEl('strong', { text: 'File: ' });
+                    fileEl.createSpan({ text: result.file.basename });
+
+                    const fromEl = resultEl.createDiv();
+                    fromEl.createEl('strong', { text: 'From: ' });
+                    fromEl.createSpan({ text: result.currentPath });
+
+                    const ruleEl = resultEl.createDiv();
+                    ruleEl.createEl('strong', { text: 'Rule: ' });
+                    ruleEl.createSpan({ text: `Rule ${result.ruleIndex + 1} (${this.rules[result.ruleIndex]?.key || 'unknown'})` });
+
+                    const reasonEl = resultEl.createDiv();
+                    reasonEl.createEl('strong', { text: 'Reason: ' });
+                    reasonEl.createSpan({
+                        text: result.error?.getUserMessage() ?? 'Destination path is invalid and the move cannot be previewed.',
+                    });
+
+                    if (result.warnings?.length) {
+                        const warningsEl = resultEl.createDiv();
+                        warningsEl.createEl('strong', { text: 'Warnings: ' });
+                        warningsEl.createSpan({ text: result.warnings.join('; ') });
+                    }
+                });
+            }
         }
 
         const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });

@@ -106,6 +106,13 @@ describe('handleFileChange', () => {
   let createFolder: jest.Mock;
   let getAbstractFileByPath: jest.Mock;
   let existingFolders: Set<string>;
+  let vault: {
+    on: jest.Mock;
+    getName: jest.Mock;
+    getAbstractFileByPath: jest.Mock;
+    createFolder: jest.Mock;
+    getMarkdownFiles: jest.Mock;
+  };
   let plugin: VaultOrganizer;
   let handle: (file: any) => Promise<void>;
   let fileEventHandlers: Record<string, (file: any, ...args: any[]) => Promise<void> | void>;
@@ -136,7 +143,7 @@ describe('handleFileChange', () => {
     createFolder = jest.fn(async (path: string) => {
       existingFolders.add(path);
     });
-    const vault = {
+    vault = {
       on: jest.fn((event: string, cb: any) => {
         fileEventHandlers[event] = cb;
         return {};
@@ -291,5 +298,21 @@ describe('handleFileChange', () => {
     await renameHandler?.(file, 'Old/Test.md');
 
     expect(renameFile).toHaveBeenCalledWith(file, 'Journal/Test.md');
+  });
+
+  it('omits invalid preview entries for reserved destinations', async () => {
+    await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'CON' });
+
+    const file = createTFile('Temp/Test.md');
+    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
+    vault.getMarkdownFiles.mockReturnValue([file]);
+
+    const results = plugin.testAllRules();
+
+    expect(results).toHaveLength(1);
+    expect(results[0].ruleIndex).toBe(0);
+    expect(results[0].newPath).toBeUndefined();
+    expect(results[0].error).toBeDefined();
+    expect(results[0].error?.getUserMessage()).toContain('reserved');
   });
 });
