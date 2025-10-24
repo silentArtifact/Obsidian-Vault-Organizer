@@ -503,7 +503,7 @@ class RuleSettingTab extends PluginSettingTab {
                 .setDesc('Destination folder is required before the rule can move files.');
             setting.settingEl.classList.add('setting-item');
             const warningEl = document.createElement('div');
-            warningEl.classList.add('vault-organizer-rule-warning');
+            warningEl.classList.add('vault-organizer-rule-message');
             warningEl.style.display = 'none';
             setting.settingEl.appendChild(warningEl);
 
@@ -571,15 +571,17 @@ class RuleSettingTab extends PluginSettingTab {
                 const hasValue = currentRule ? hasValidValue(currentRule) : false;
 
                 if (error) {
-                    setting.settingEl.classList.add('vault-organizer-rule-error');
+                    warningEl.classList.add('vault-organizer-rule-error');
+                    warningEl.classList.remove('vault-organizer-rule-warning');
                     warningEl.textContent = `Invalid regular expression: ${error.message}`;
                     warningEl.style.display = '';
                 } else if (ruleRequiresValue && !hasValue) {
-                    setting.settingEl.classList.add('vault-organizer-rule-error');
+                    warningEl.classList.add('vault-organizer-rule-warning');
+                    warningEl.classList.remove('vault-organizer-rule-error');
                     warningEl.textContent = 'Value is required for contains/starts-with/ends-with rules.';
                     warningEl.style.display = '';
                 } else {
-                    setting.settingEl.classList.remove('vault-organizer-rule-error');
+                    warningEl.classList.remove('vault-organizer-rule-warning', 'vault-organizer-rule-error');
                     warningEl.textContent = '';
                     warningEl.style.display = 'none';
                 }
@@ -801,7 +803,7 @@ class RuleSettingTab extends PluginSettingTab {
         }
         const settingElements = containerEl.querySelectorAll('.setting-item');
         settingElements.forEach((settingEl, index) => {
-            const warningEl = settingEl.querySelector('.vault-organizer-rule-warning') as HTMLElement | null;
+            const warningEl = settingEl.querySelector('.vault-organizer-rule-message') as HTMLElement | null;
             if (!warningEl) {
                 return;
             }
@@ -814,15 +816,17 @@ class RuleSettingTab extends PluginSettingTab {
             const hasValue = currentRule ? hasValidValue(currentRule) : false;
 
             if (error) {
-                settingEl.classList.add('vault-organizer-rule-error');
+                warningEl.classList.add('vault-organizer-rule-error');
+                warningEl.classList.remove('vault-organizer-rule-warning');
                 warningEl.textContent = `Invalid regular expression: ${error.message}`;
                 warningEl.style.display = '';
             } else if (ruleRequiresValue && !hasValue) {
-                settingEl.classList.add('vault-organizer-rule-error');
+                warningEl.classList.add('vault-organizer-rule-warning');
+                warningEl.classList.remove('vault-organizer-rule-error');
                 warningEl.textContent = 'Value is required for contains/starts-with/ends-with rules.';
                 warningEl.style.display = '';
             } else {
-                settingEl.classList.remove('vault-organizer-rule-error');
+                warningEl.classList.remove('vault-organizer-rule-warning', 'vault-organizer-rule-error');
                 warningEl.textContent = '';
                 warningEl.style.display = 'none';
             }
