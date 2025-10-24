@@ -460,11 +460,25 @@ describe('settings UI', () => {
 
     const warning = await screen.findByText(/invalid regular expression/i);
     expect(warning.textContent).toMatch(/invalid regular expression/i);
+    expect(warning.classList.contains('vault-organizer-rule-error')).toBe(true);
+    expect(warning.classList.contains('vault-organizer-rule-warning')).toBe(false);
     expect((Notice as jest.Mock)).toHaveBeenCalledWith(expect.stringContaining('Failed to parse regular expression'));
     expect(plugin.getRuleErrorForIndex(0)).toBeDefined();
     expect(plugin.settings.rules[0]).toEqual({ key: '', value: '\\', destination: '', matchType: 'regex', isRegex: true, flags: '', debug: false, enabled: false });
     expect((plugin as any).rules).toEqual([]);
     expect(matchTypeSelect.value).toBe('regex');
+  });
+
+  it('keeps non-error warnings styled as warnings', async () => {
+    await fireEvent.click(screen.getByText('Add Rule'));
+    await flushPromises();
+    const matchTypeSelect = screen.getByLabelText('Match type') as HTMLSelectElement;
+    await fireEvent.change(matchTypeSelect, { target: { value: 'contains' } });
+    await flushPromises();
+
+    const warning = await screen.findByText(/value is required for contains\/starts-with\/ends-with rules\./i);
+    expect(warning.classList.contains('vault-organizer-rule-warning')).toBe(true);
+    expect(warning.classList.contains('vault-organizer-rule-error')).toBe(false);
   });
 });
 
