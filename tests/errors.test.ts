@@ -36,19 +36,21 @@ describe('Custom Error Types', () => {
 			expect(userMessage).toContain('Check file permissions');
 		});
 
-		it('should handle all operation types', () => {
-			const operations: Array<'read' | 'write' | 'move' | 'delete'> = [
-				'read',
-				'write',
-				'move',
-				'delete',
-			];
+                it('should handle all operation types', () => {
+                        const operations: Array<'read' | 'write' | 'move' | 'delete' | 'create-folder'> = [
+                                'read',
+                                'write',
+                                'move',
+                                'delete',
+                                'create-folder',
+                        ];
 
-			operations.forEach((op) => {
-				const error = new PermissionError('test.md', op);
-				expect(error.operation).toBe(op);
-				expect(error.getUserMessage()).toContain(op);
-			});
+                        operations.forEach((op) => {
+                                const error = new PermissionError('test.md', op);
+                                expect(error.operation).toBe(op);
+                                const expectedOperationText = op.replace(/-/g, ' ');
+                                expect(error.getUserMessage()).toContain(expectedOperationText);
+                        });
 		});
 
 		it('should preserve original error', () => {
@@ -61,17 +63,19 @@ describe('Custom Error Types', () => {
 
 	describe('FileConflictError', () => {
 		it('should create a file conflict error with correct properties', () => {
-			const error = new FileConflictError(
-				'source.md',
-				'destination.md',
-				'exists'
-			);
+                        const error = new FileConflictError(
+                                'source.md',
+                                'destination.md',
+                                'exists',
+                                'move'
+                        );
 
-			expect(error).toBeInstanceOf(VaultOrganizerError);
-			expect(error.name).toBe('FileConflictError');
-			expect(error.sourcePath).toBe('source.md');
-			expect(error.destinationPath).toBe('destination.md');
-			expect(error.conflictType).toBe('exists');
+                        expect(error).toBeInstanceOf(VaultOrganizerError);
+                        expect(error.name).toBe('FileConflictError');
+                        expect(error.sourcePath).toBe('source.md');
+                        expect(error.destinationPath).toBe('destination.md');
+                        expect(error.conflictType).toBe('exists');
+                        expect(error.operation).toBe('move');
 		});
 
 		it('should provide user-friendly messages for all conflict types', () => {
@@ -82,7 +86,7 @@ describe('Custom Error Types', () => {
 			];
 
 			types.forEach((type) => {
-				const error = new FileConflictError('src.md', 'dest.md', type);
+                                const error = new FileConflictError('src.md', 'dest.md', type, 'move');
 				const message = error.getUserMessage();
 
 				expect(message).toContain('src.md');
@@ -181,8 +185,8 @@ describe('Custom Error Types', () => {
 			];
 
 			testCases.forEach((msg) => {
-				const error = new Error(msg);
-				const categorized = categorizeError(error, 'test.md');
+                        const error = new Error(msg);
+                        const categorized = categorizeError(error, 'test.md', 'move');
 
 				expect(categorized).toBeInstanceOf(PermissionError);
 				expect((categorized as PermissionError).filePath).toBe('test.md');
@@ -197,14 +201,15 @@ describe('Custom Error Types', () => {
 			];
 
 			testCases.forEach((msg) => {
-				const error = new Error(msg);
-				const categorized = categorizeError(error, 'src.md', 'dest.md');
+                                const error = new Error(msg);
+                                const categorized = categorizeError(error, 'src.md', 'move', 'dest.md');
 
-				expect(categorized).toBeInstanceOf(FileConflictError);
-				const conflict = categorized as FileConflictError;
-				expect(conflict.sourcePath).toBe('src.md');
-				expect(conflict.destinationPath).toBe('dest.md');
-				expect(conflict.conflictType).toBe('exists');
+                                expect(categorized).toBeInstanceOf(FileConflictError);
+                                const conflict = categorized as FileConflictError;
+                                expect(conflict.sourcePath).toBe('src.md');
+                                expect(conflict.destinationPath).toBe('dest.md');
+                                expect(conflict.conflictType).toBe('exists');
+                                expect(conflict.operation).toBe('move');
 			});
 		});
 
@@ -213,10 +218,12 @@ describe('Custom Error Types', () => {
 
 			testCases.forEach((msg) => {
 				const error = new Error(msg);
-				const categorized = categorizeError(error, 'test.md', 'dest.md');
+                                const categorized = categorizeError(error, 'test.md', 'move', 'dest.md');
 
-				expect(categorized).toBeInstanceOf(FileConflictError);
-				expect((categorized as FileConflictError).conflictType).toBe('locked');
+                                expect(categorized).toBeInstanceOf(FileConflictError);
+                                const conflict = categorized as FileConflictError;
+                                expect(conflict.conflictType).toBe('locked');
+                                expect(conflict.operation).toBe('move');
 			});
 		});
 
@@ -229,10 +236,12 @@ describe('Custom Error Types', () => {
 
 			testCases.forEach((msg) => {
 				const error = new Error(msg);
-				const categorized = categorizeError(error, 'test.md', 'dest.md');
+                                const categorized = categorizeError(error, 'test.md', 'move', 'dest.md');
 
-				expect(categorized).toBeInstanceOf(FileConflictError);
-				expect((categorized as FileConflictError).conflictType).toBe('in-use');
+                                expect(categorized).toBeInstanceOf(FileConflictError);
+                                const conflict = categorized as FileConflictError;
+                                expect(conflict.conflictType).toBe('in-use');
+                                expect(conflict.operation).toBe('move');
 			});
 		});
 
@@ -245,7 +254,7 @@ describe('Custom Error Types', () => {
 
 			testCases.forEach((msg) => {
 				const error = new Error(msg);
-				const categorized = categorizeError(error, 'test.md', 'bad<>path.md');
+                                const categorized = categorizeError(error, 'test.md', 'move', 'bad<>path.md');
 
 				expect(categorized).toBeInstanceOf(InvalidPathError);
 				const pathError = categorized as InvalidPathError;
@@ -259,7 +268,7 @@ describe('Custom Error Types', () => {
 
 			testCases.forEach((msg) => {
 				const error = new Error(msg);
-				const categorized = categorizeError(error, 'test.md', 'very/long/path.md');
+                                const categorized = categorizeError(error, 'test.md', 'move', 'very/long/path.md');
 
 				expect(categorized).toBeInstanceOf(InvalidPathError);
 				expect((categorized as InvalidPathError).reason).toBe('too-long');
@@ -268,7 +277,7 @@ describe('Custom Error Types', () => {
 
 		it('should fall back to FileOperationError for unknown errors', () => {
 			const error = new Error('Unknown error occurred');
-			const categorized = categorizeError(error, 'test.md');
+                        const categorized = categorizeError(error, 'test.md', 'move');
 
 			expect(categorized).toBeInstanceOf(FileOperationError);
 			const opError = categorized as FileOperationError;
@@ -278,14 +287,14 @@ describe('Custom Error Types', () => {
 
 		it('should handle non-Error objects', () => {
 			const error = 'String error message';
-			const categorized = categorizeError(error, 'test.md');
+                        const categorized = categorizeError(error, 'test.md', 'move');
 
 			expect(categorized).toBeInstanceOf(FileOperationError);
 		});
 
 		it('should handle null/undefined destination paths', () => {
 			const error = new Error('permission denied');
-			const categorized = categorizeError(error, 'test.md');
+                        const categorized = categorizeError(error, 'test.md', 'move');
 
 			expect(categorized).toBeInstanceOf(PermissionError);
 			expect((categorized as PermissionError).filePath).toBe('test.md');
@@ -293,7 +302,7 @@ describe('Custom Error Types', () => {
 
 		it('should be case-insensitive when matching error messages', () => {
 			const error = new Error('PERMISSION DENIED');
-			const categorized = categorizeError(error, 'test.md');
+                    const categorized = categorizeError(error, 'test.md', 'move');
 
 			expect(categorized).toBeInstanceOf(PermissionError);
 		});

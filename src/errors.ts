@@ -26,42 +26,51 @@ export abstract class VaultOrganizerError extends Error {
  * Error thrown when a file operation fails due to insufficient permissions.
  */
 export class PermissionError extends VaultOrganizerError {
-	constructor(
-		public readonly filePath: string,
-		public readonly operation: 'read' | 'write' | 'move' | 'delete',
-		public readonly originalError?: Error
-	) {
-		super(`Permission denied: Cannot ${operation} file "${filePath}"`);
-	}
+        constructor(
+                public readonly filePath: string,
+                public readonly operation: string,
+                public readonly originalError?: Error
+        ) {
+                const friendlyOperation = formatOperationForMessage(operation);
+                super(`Permission denied: Cannot ${friendlyOperation} "${filePath}"`);
+        }
 
-	getUserMessage(): string {
-		return `Permission denied: Cannot ${this.operation} "${this.filePath}". Check file permissions and try again.`;
-	}
+        getUserMessage(): string {
+                const friendlyOperation = formatOperationForMessage(this.operation);
+                return `Permission denied: Cannot ${friendlyOperation} "${this.filePath}". Check file permissions and try again.`;
+        }
 }
 
 /**
  * Error thrown when a file operation fails due to a conflict (e.g., destination file already exists).
  */
 export class FileConflictError extends VaultOrganizerError {
-	constructor(
-		public readonly sourcePath: string,
-		public readonly destinationPath: string,
-		public readonly conflictType: 'exists' | 'locked' | 'in-use',
-		public readonly originalError?: Error
-	) {
-		super(
-			`File conflict: Cannot move "${sourcePath}" to "${destinationPath}" - file ${conflictType}`
-		);
-	}
+        constructor(
+                public readonly sourcePath: string,
+                public readonly destinationPath: string | undefined,
+                public readonly conflictType: 'exists' | 'locked' | 'in-use',
+                public readonly operation: string,
+                public readonly originalError?: Error
+        ) {
+                const friendlyOperation = formatOperationForMessage(operation);
+                const baseMessage = destinationPath
+                        ? `Cannot ${friendlyOperation} "${sourcePath}" to "${destinationPath}"`
+                        : `Cannot ${friendlyOperation} "${sourcePath}"`;
+                super(`File conflict: ${baseMessage} - file ${conflictType}`);
+        }
 
-	getUserMessage(): string {
-		const reasons = {
-			exists: 'a file already exists at that location',
-			locked: 'the destination file is locked',
-			'in-use': 'the destination file is currently in use',
-		};
-		return `Cannot move "${this.sourcePath}" to "${this.destinationPath}": ${reasons[this.conflictType]}.`;
-	}
+        getUserMessage(): string {
+                const reasons = {
+                        exists: 'a file already exists at that location',
+                        locked: 'the destination file is locked',
+                        'in-use': 'the destination file is currently in use',
+                };
+                const friendlyOperation = formatOperationForMessage(this.operation);
+                const baseMessage = this.destinationPath
+                        ? `Cannot ${friendlyOperation} "${this.sourcePath}" to "${this.destinationPath}"`
+                        : `Cannot ${friendlyOperation} "${this.sourcePath}"`;
+                return `${baseMessage}: ${reasons[this.conflictType]}.`;
+        }
 }
 
 /**
@@ -102,20 +111,22 @@ export class InvalidPathError extends VaultOrganizerError {
  * Error thrown when a file operation fails but doesn't fit into specific categories.
  */
 export class FileOperationError extends VaultOrganizerError {
-	constructor(
-		public readonly filePath: string,
-		public readonly operation: string,
-		public readonly originalError?: Error
-	) {
-		super(`File operation failed: ${operation} on "${filePath}"`);
-	}
+        constructor(
+                public readonly filePath: string,
+                public readonly operation: string,
+                public readonly originalError?: Error
+        ) {
+                const friendlyOperation = formatOperationForMessage(operation);
+                super(`File operation failed: ${friendlyOperation} on "${filePath}"`);
+        }
 
-	getUserMessage(): string {
-		const errorDetails = this.originalError?.message
-			? `: ${this.originalError.message}`
-			: '';
-		return `Failed to ${this.operation} "${this.filePath}"${errorDetails}.`;
-	}
+        getUserMessage(): string {
+                const friendlyOperation = formatOperationForMessage(this.operation);
+                const errorDetails = this.originalError?.message
+                        ? `: ${this.originalError.message}`
+                        : '';
+                return `Failed to ${friendlyOperation} "${this.filePath}"${errorDetails}.`;
+        }
 }
 
 /**
@@ -123,58 +134,62 @@ export class FileOperationError extends VaultOrganizerError {
  * This is useful for handling errors from Obsidian's API which may not provide specific error types.
  */
 export function categorizeError(
-	error: unknown,
-	filePath: string,
-	destinationPath?: string
+        error: unknown,
+        filePath: string,
+        operation: string,
+        destinationPath?: string
 ): VaultOrganizerError {
-	const err = error instanceof Error ? error : new Error(String(error));
-	const message = err.message.toLowerCase();
+        const err = error instanceof Error ? error : new Error(String(error));
+        const message = err.message.toLowerCase();
 
-	// Permission errors
-	if (
+        // Permission errors
+        if (
 		message.includes('permission') ||
 		message.includes('eacces') ||
 		message.includes('eperm') ||
 		message.includes('access denied')
-	) {
-		return new PermissionError(filePath, 'move', err);
-	}
+        ) {
+                return new PermissionError(filePath, operation, err);
+        }
 
-	// File conflict errors
-	if (
-		message.includes('already exists') ||
-		message.includes('eexist') ||
-		message.includes('file exists')
-	) {
-		return new FileConflictError(
-			filePath,
-			destinationPath || filePath,
-			'exists',
-			err
-		);
-	}
+        // File conflict errors
+        if (
+                message.includes('already exists') ||
+                message.includes('eexist') ||
+                message.includes('file exists')
+        ) {
+                return new FileConflictError(
+                        filePath,
+                        destinationPath || filePath,
+                        'exists',
+                        operation,
+                        err
+                );
+        }
 
-	if (message.includes('locked') || message.includes('ebusy')) {
-		return new FileConflictError(
-			filePath,
-			destinationPath || filePath,
-			'locked',
-			err
-		);
-	}
+        if (message.includes('locked') || message.includes('ebusy')) {
+                return new FileConflictError(
+                        filePath,
+                        destinationPath || filePath,
+                        'locked',
+                        operation,
+                        err
+                );
+        }
 
-	if (
-		message.includes('in use') ||
-		message.includes('being used') ||
-		message.includes('etxtbsy')
-	) {
-		return new FileConflictError(
-			filePath,
-			destinationPath || filePath,
-			'in-use',
-			err
-		);
-	}
+        if (
+                message.includes('in use') ||
+                message.includes('being used') ||
+                message.includes('etxtbsy')
+        ) {
+                return new FileConflictError(
+                        filePath,
+                        destinationPath || filePath,
+                        'in-use',
+                        operation,
+                        err
+                );
+        }
 
 	// Path validation errors
 	if (
@@ -189,6 +204,10 @@ export function categorizeError(
 		return new InvalidPathError(destinationPath || filePath, 'too-long');
 	}
 
-	// Generic file operation error
-	return new FileOperationError(filePath, 'move', err);
+        // Generic file operation error
+        return new FileOperationError(filePath, operation, err);
+}
+
+function formatOperationForMessage(operation: string): string {
+        return operation.replace(/-/g, ' ');
 }

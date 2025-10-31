@@ -255,6 +255,32 @@ describe('handleFileChange', () => {
     consoleErrorSpy.mockRestore();
   });
 
+  it('shows a create-folder failure notice when folder creation fails', async () => {
+    await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
+    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
+    const file = createTFile('Temp/Test.md');
+    const folderError = new Error('permission denied');
+    createFolder.mockImplementationOnce(async () => {
+      throw folderError;
+    });
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await handle(file);
+
+    expect(createFolder).toHaveBeenCalledWith('Journal');
+    expect(renameFile).not.toHaveBeenCalled();
+    expect(Notice).toHaveBeenCalledWith(
+      'Permission denied: Cannot create folder "Journal". Check file permissions and try again.'
+    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[Vault Organizer]'),
+      expect.stringContaining('Permission denied'),
+      expect.objectContaining({ originalError: folderError })
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
+
   it('applies rules to existing files via command', async () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
     const file = createTFile('Temp/Test.md');
