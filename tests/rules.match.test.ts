@@ -13,55 +13,60 @@ describe('matchFrontmatter', () => {
   });
 
   it('matches exact string values', () => {
-    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
+    const frontmatter = { tag: 'journal' };
     const rules: FrontmatterRule[] = [
       { key: 'tag', matchType: 'equals', value: 'journal', destination: 'Journal', enabled: true }
     ];
-    const result = matchFrontmatter.call({ app }, file, rules);
+    const result = matchFrontmatter.call({ app }, file, rules, frontmatter);
     expect(result).toEqual(rules[0]);
+    expect(metadataCache.getFileCache).not.toHaveBeenCalled();
   });
 
   it('matches regex values', () => {
-    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'Journal' } });
+    const frontmatter = { tag: 'Journal' };
     const rules: FrontmatterRule[] = [
       { key: 'tag', matchType: 'regex', value: /journal/i, destination: 'Journal', enabled: true }
     ];
-    const result = matchFrontmatter.call({ app }, file, rules);
+    const result = matchFrontmatter.call({ app }, file, rules, frontmatter);
     expect(result).toEqual(rules[0]);
+    expect(metadataCache.getFileCache).not.toHaveBeenCalled();
   });
 
   it('ignores disabled rules', () => {
-    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
+    const frontmatter = { tag: 'journal' };
     const rules: FrontmatterRule[] = [
       { key: 'tag', matchType: 'equals', value: 'journal', destination: 'Disabled', enabled: false },
       { key: 'tag', matchType: 'equals', value: 'journal', destination: 'Active', enabled: true },
     ];
-    const result = matchFrontmatter.call({ app }, file, rules);
+    const result = matchFrontmatter.call({ app }, file, rules, frontmatter);
     expect(result).toEqual(rules[1]);
+    expect(metadataCache.getFileCache).not.toHaveBeenCalled();
   });
 
   it('matches using contains/starts-with/ends-with operators', () => {
-    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal-entry' } });
+    const frontmatter = { tag: 'journal-entry' };
     const rules: FrontmatterRule[] = [
       { key: 'tag', matchType: 'contains', value: 'journal', destination: 'Contains', enabled: true },
       { key: 'tag', matchType: 'starts-with', value: 'journal', destination: 'StartsWith', enabled: true },
       { key: 'tag', matchType: 'ends-with', value: 'entry', destination: 'EndsWith', enabled: true },
     ];
-    expect(matchFrontmatter.call({ app }, file, [rules[0]])).toEqual(rules[0]);
-    expect(matchFrontmatter.call({ app }, file, [rules[1]])).toEqual(rules[1]);
-    expect(matchFrontmatter.call({ app }, file, [rules[2]])).toEqual(rules[2]);
+    expect(matchFrontmatter.call({ app }, file, [rules[0]], frontmatter)).toEqual(rules[0]);
+    expect(matchFrontmatter.call({ app }, file, [rules[1]], frontmatter)).toEqual(rules[1]);
+    expect(matchFrontmatter.call({ app }, file, [rules[2]], frontmatter)).toEqual(rules[2]);
+    expect(metadataCache.getFileCache).not.toHaveBeenCalled();
   });
 
   it('does not match partial rules with empty values', () => {
-    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal-entry' } });
+    const frontmatter = { tag: 'journal-entry' };
     const baseRule = { key: 'tag', value: '', destination: 'Invalid', enabled: true } as const;
     const containsRule: FrontmatterRule = { ...baseRule, matchType: 'contains' };
     const startsWithRule: FrontmatterRule = { ...baseRule, matchType: 'starts-with' };
     const endsWithRule: FrontmatterRule = { ...baseRule, matchType: 'ends-with' };
 
-    expect(matchFrontmatter.call({ app }, file, [containsRule])).toBeUndefined();
-    expect(matchFrontmatter.call({ app }, file, [startsWithRule])).toBeUndefined();
-    expect(matchFrontmatter.call({ app }, file, [endsWithRule])).toBeUndefined();
+    expect(matchFrontmatter.call({ app }, file, [containsRule], frontmatter)).toBeUndefined();
+    expect(matchFrontmatter.call({ app }, file, [startsWithRule], frontmatter)).toBeUndefined();
+    expect(matchFrontmatter.call({ app }, file, [endsWithRule], frontmatter)).toBeUndefined();
+    expect(metadataCache.getFileCache).not.toHaveBeenCalled();
   });
 
   it('returns undefined when no frontmatter or missing keys', () => {
@@ -78,50 +83,55 @@ describe('matchFrontmatter', () => {
   });
 
   it('returns the first matching rule when multiple rules match', () => {
-    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
+    const frontmatter = { tag: 'journal' };
     const rules: FrontmatterRule[] = [
       { key: 'tag', matchType: 'equals', value: 'note', destination: 'Note', enabled: true },
       { key: 'tag', matchType: 'equals', value: 'journal', destination: 'Journal', enabled: true },
       { key: 'tag', matchType: 'regex', value: /journal/, destination: 'JournalRegex', enabled: true }
     ];
-    const result = matchFrontmatter.call({ app }, file, rules);
+    const result = matchFrontmatter.call({ app }, file, rules, frontmatter);
     expect(result).toEqual(rules[1]);
+    expect(metadataCache.getFileCache).not.toHaveBeenCalled();
   });
 
   it('matches when frontmatter values are arrays of strings', () => {
-    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tags: ['work', 'journal'] } });
+    const frontmatter = { tags: ['work', 'journal'] };
     const rules: FrontmatterRule[] = [
       { key: 'tags', matchType: 'equals', value: 'journal', destination: 'Journal Folder', enabled: true }
     ];
-    const result = matchFrontmatter.call({ app }, file, rules);
+    const result = matchFrontmatter.call({ app }, file, rules, frontmatter);
     expect(result).toEqual(rules[0]);
+    expect(metadataCache.getFileCache).not.toHaveBeenCalled();
   });
 
   it('matches when array values include mixed scalar types', () => {
-    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tags: ['daily', 42, true] } });
+    const frontmatter = { tags: ['daily', 42, true] };
     const rules: FrontmatterRule[] = [
       { key: 'tags', matchType: 'equals', value: '42', destination: 'Numbers', enabled: true }
     ];
-    const result = matchFrontmatter.call({ app }, file, rules);
+    const result = matchFrontmatter.call({ app }, file, rules, frontmatter);
     expect(result).toEqual(rules[0]);
+    expect(metadataCache.getFileCache).not.toHaveBeenCalled();
   });
 
   it('matches any selected tag when rule values contain multiple tags', () => {
-    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tags: ['#journal', '#ideas'] } });
+    const frontmatter = { tags: ['#journal', '#ideas'] };
     const rules: FrontmatterRule[] = [
       { key: 'tags', matchType: 'equals', value: '#daily #ideas #todo', destination: 'Ideas', enabled: true }
     ];
-    const result = matchFrontmatter.call({ app }, file, rules);
+    const result = matchFrontmatter.call({ app }, file, rules, frontmatter);
     expect(result).toEqual(rules[0]);
+    expect(metadataCache.getFileCache).not.toHaveBeenCalled();
   });
 
   it('matches regex rules against array elements', () => {
-    metadataCache.getFileCache.mockReturnValue({ frontmatter: { tags: ['Work', 'Journal'] } });
+    const frontmatter = { tags: ['Work', 'Journal'] };
     const rules: FrontmatterRule[] = [
       { key: 'tags', matchType: 'regex', value: /journal/i, destination: 'Journal Regex', enabled: true }
     ];
-    const result = matchFrontmatter.call({ app }, file, rules);
+    const result = matchFrontmatter.call({ app }, file, rules, frontmatter);
     expect(result).toEqual(rules[0]);
+    expect(metadataCache.getFileCache).not.toHaveBeenCalled();
   });
 
   it('resets global regex rules between different notes', () => {
@@ -132,14 +142,11 @@ describe('matchFrontmatter', () => {
     const fileA = { path: 'First.md' } as TFile;
     const fileB = { path: 'Second.md' } as TFile;
 
-    metadataCache.getFileCache
-      .mockReturnValueOnce({ frontmatter: { tag: 'journal' } })
-      .mockReturnValueOnce({ frontmatter: { tag: 'journal' } });
-
-    const firstResult = matchFrontmatter.call({ app }, fileA, rules);
-    const secondResult = matchFrontmatter.call({ app }, fileB, rules);
+    const firstResult = matchFrontmatter.call({ app }, fileA, rules, { tag: 'journal' });
+    const secondResult = matchFrontmatter.call({ app }, fileB, rules, { tag: 'journal' });
 
     expect(firstResult).toEqual(rules[0]);
     expect(secondResult).toEqual(rules[0]);
+    expect(metadataCache.getFileCache).not.toHaveBeenCalled();
   });
 });

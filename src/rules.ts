@@ -35,9 +35,14 @@ export interface SerializedFrontmatterRule {
  * @param rules - Array of frontmatter rules to test against
  * @returns The first matching rule, or undefined if no rules match or file has no frontmatter
  */
-export function matchFrontmatter(this: { app: App }, file: TFile, rules: FrontmatterRule[]): FrontmatterRule | undefined {
-    const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
-    if (!frontmatter) {
+export function matchFrontmatter(
+    this: { app: App },
+    file: TFile,
+    rules: FrontmatterRule[],
+    frontmatter?: Record<string, unknown>
+): FrontmatterRule | undefined {
+    const cacheFrontmatter = frontmatter ?? this.app.metadataCache.getFileCache(file)?.frontmatter;
+    if (!cacheFrontmatter) {
         return undefined;
     }
 
@@ -45,7 +50,7 @@ export function matchFrontmatter(this: { app: App }, file: TFile, rules: Frontma
         if (rule.enabled === false) {
             return false;
         }
-        const value = frontmatter[rule.key];
+        const value = cacheFrontmatter[rule.key];
         if (value === undefined || value === null) {
             return false;
         }
