@@ -215,7 +215,7 @@ export default class VaultOrganizer extends Plugin {
                 await this.app.vault.createFolder(currentPath);
             } catch (err) {
                 // Categorize the error for better user feedback
-                const categorized = categorizeError(err, currentPath);
+                const categorized = categorizeError(err, currentPath, 'create-folder');
                 throw categorized;
             }
         }
@@ -281,7 +281,7 @@ export default class VaultOrganizer extends Plugin {
                 await this.app.fileManager.renameFile(file, newPath);
             } catch (err) {
                 // Categorize the rename error for better user feedback
-                const categorized = categorizeError(err, file.path, newPath);
+                const categorized = categorizeError(err, file.path, 'move', newPath);
                 throw categorized;
             }
         } catch (err) {
@@ -291,7 +291,7 @@ export default class VaultOrganizer extends Plugin {
                 console.error(`[Vault Organizer] ${err.name}:`, err.message, err);
             } else {
                 // Fallback for unexpected errors
-                const categorized = categorizeError(err, file.path, intendedDestination);
+                const categorized = categorizeError(err, file.path, 'move', intendedDestination);
                 new Notice(categorized.getUserMessage());
                 console.error('[Vault Organizer] Unexpected error:', err);
             }
