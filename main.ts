@@ -230,7 +230,7 @@ export default class VaultOrganizer extends Plugin {
                 return;
             }
 
-            const rule = matchFrontmatter.call(this, file, this.rules);
+            const rule = matchFrontmatter.call(this, file, this.rules, frontmatter);
             if (!rule) {
                 return;
             }
@@ -323,7 +323,7 @@ export default class VaultOrganizer extends Plugin {
                 if (rule.enabled === false) {
                     return false;
                 }
-                return matchFrontmatter.call(this, file, [rule]);
+                return matchFrontmatter.call(this, file, [rule], frontmatter);
             });
 
             if (ruleIndex === -1) {

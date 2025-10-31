@@ -180,10 +180,12 @@ describe('handleFileChange', () => {
   it('renames file when rule matches after saving settings', async () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal/' });
     expect((plugin as any).rules).toContainEqual(expect.objectContaining({ key: 'tag', value: 'journal', destination: 'Journal/' }));
+    metadataCache.getFileCache.mockClear();
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
     const file = createTFile('Temp/Test.md');
     await handle(file);
     expect(renameFile).toHaveBeenCalledWith(file, 'Journal/Test.md');
+    expect(metadataCache.getFileCache).toHaveBeenCalledTimes(1);
   });
 
   it('skips rename when destination is blank', async () => {
