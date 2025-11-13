@@ -29,20 +29,47 @@ export class Plugin {
 
 export class Modal {
 	app: any;
-	contentEl: any = {
-		empty: jest.fn(),
-		createEl: jest.fn(() => ({
-			createEl: jest.fn(),
-			createSpan: jest.fn(),
-			createDiv: jest.fn(),
-		})),
-		createDiv: jest.fn(() => ({
-			style: {},
-			createEl: jest.fn(),
-			createSpan: jest.fn(),
-			createDiv: jest.fn(),
-		})),
-	};
+	contentEl: any;
+	private elements: any[] = [];
+
+	constructor() {
+		const createMockElement = (): any => {
+			const element: any = {
+				innerHTML: '',
+				textContent: '',
+				style: {},
+				onclick: null,
+				createEl: jest.fn((tag: string, options?: any) => {
+					const child = createMockElement();
+					if (options?.text) child.textContent = options.text;
+					if (options?.cls) child.className = options.cls;
+					element.textContent += options?.text || '';
+					return child;
+				}),
+				createSpan: jest.fn((options?: any) => {
+					const child = createMockElement();
+					if (options?.text) {
+						child.textContent = options.text;
+						element.textContent += options.text;
+					}
+					return child;
+				}),
+				createDiv: jest.fn((options?: any) => {
+					const child = createMockElement();
+					if (options?.cls) child.className = options.cls;
+					return child;
+				}),
+				empty: jest.fn(() => {
+					element.innerHTML = '';
+					element.textContent = '';
+				}),
+				querySelectorAll: jest.fn(() => []),
+			};
+			return element;
+		};
+
+		this.contentEl = createMockElement();
+	}
 
 	open(): void {}
 	close(): void {}
