@@ -49,6 +49,7 @@ const WINDOWS_RESERVED_NAMES = new Set([
  * Characters that are invalid in filenames on Windows.
  * We validate against Windows as it's the most restrictive.
  */
+// eslint-disable-next-line no-control-regex
 const INVALID_FILENAME_CHARS = /[<>:"|?*\x00-\x1F]/;
 
 /**
