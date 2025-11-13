@@ -260,7 +260,11 @@ describe('settings UI', () => {
     await fireEvent.click(screen.getByText('Add Rule'));
     await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(1);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '', destination: '', matchType: 'equals', debug: false, enabled: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith(expect.objectContaining({
+      rules: [{ key: '', value: '', destination: '', matchType: 'equals', debug: false, enabled: false }],
+      maxHistorySize: expect.any(Number),
+      moveHistory: expect.any(Array)
+    }));
     expect((plugin as any).rules).toEqual([{ key: '', matchType: 'equals', value: '', destination: '', debug: false, enabled: false }]);
     expect(reorganizeSpy).not.toHaveBeenCalled();
 
@@ -269,7 +273,11 @@ describe('settings UI', () => {
     await jest.runOnlyPendingTimersAsync();
     await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(2);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: '', destination: '', matchType: 'equals', debug: false, enabled: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith(expect.objectContaining({
+      rules: [{ key: 'tag', value: '', destination: '', matchType: 'equals', debug: false, enabled: false }],
+      maxHistorySize: expect.any(Number),
+      moveHistory: expect.any(Array)
+    }));
     expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'equals', value: '', destination: '', debug: false, enabled: false }]);
     expect(reorganizeSpy).not.toHaveBeenCalled();
 
@@ -278,7 +286,11 @@ describe('settings UI', () => {
     await jest.runOnlyPendingTimersAsync();
     await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(3);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: '', matchType: 'equals', debug: false, enabled: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith(expect.objectContaining({
+      rules: [{ key: 'tag', value: 'journal', destination: '', matchType: 'equals', debug: false, enabled: false }],
+      maxHistorySize: expect.any(Number),
+      moveHistory: expect.any(Array)
+    }));
     expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'equals', value: 'journal', destination: '', debug: false, enabled: false }]);
     expect(reorganizeSpy).not.toHaveBeenCalled();
 
@@ -287,7 +299,11 @@ describe('settings UI', () => {
     await jest.runOnlyPendingTimersAsync();
     await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(4);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'equals', debug: false, enabled: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith(expect.objectContaining({
+      rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'equals', debug: false, enabled: false }],
+      maxHistorySize: expect.any(Number),
+      moveHistory: expect.any(Array)
+    }));
     expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'equals', value: 'journal', destination: 'Journal', debug: false, enabled: false }]);
     expect(reorganizeSpy).not.toHaveBeenCalled();
 
@@ -299,7 +315,11 @@ describe('settings UI', () => {
     await fireEvent.change(matchTypeSelect, { target: { value: 'regex' } });
     await flushPromises();
     expect(plugin.saveData).toHaveBeenCalledTimes(5);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'regex', isRegex: true, flags: '', debug: false, enabled: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith(expect.objectContaining({
+      rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'regex', isRegex: true, flags: '', debug: false, enabled: false }],
+      maxHistorySize: expect.any(Number),
+      moveHistory: expect.any(Array)
+    }));
     expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'regex', value: expect.any(RegExp), destination: 'Journal', debug: false, enabled: false }]);
     expect(((plugin as any).rules[0].value as RegExp).source).toBe('journal');
     expect(((plugin as any).rules[0].value as RegExp).flags).toBe('');
@@ -312,7 +332,11 @@ describe('settings UI', () => {
     await jest.runOnlyPendingTimersAsync();
     await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(6);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'regex', isRegex: true, flags: 'i', debug: false, enabled: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith(expect.objectContaining({
+      rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'regex', isRegex: true, flags: 'i', debug: false, enabled: false }],
+      maxHistorySize: expect.any(Number),
+      moveHistory: expect.any(Array)
+    }));
     expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'regex', value: expect.any(RegExp), destination: 'Journal', debug: false, enabled: false }]);
     expect(((plugin as any).rules[0].value as RegExp).flags).toBe('i');
     expect(reorganizeSpy).toHaveBeenCalledTimes(1);
@@ -322,7 +346,11 @@ describe('settings UI', () => {
     await fireEvent.click(activationToggle);
     await flushPromises();
     expect(plugin.saveData).toHaveBeenCalledTimes(7);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'regex', isRegex: true, flags: 'i', debug: false, enabled: true }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith(expect.objectContaining({
+      rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'regex', isRegex: true, flags: 'i', debug: false, enabled: true }],
+      maxHistorySize: expect.any(Number),
+      moveHistory: expect.any(Array)
+    }));
     expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'regex', value: expect.any(RegExp), destination: 'Journal', debug: false, enabled: true }]);
     expect(reorganizeSpy).toHaveBeenCalledTimes(2);
 
@@ -330,14 +358,22 @@ describe('settings UI', () => {
     await fireEvent.click(debugToggle);
     await flushPromises();
     expect(plugin.saveData).toHaveBeenCalledTimes(8);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'regex', isRegex: true, flags: 'i', debug: true, enabled: true }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith(expect.objectContaining({
+      rules: [{ key: 'tag', value: 'journal', destination: 'Journal', matchType: 'regex', isRegex: true, flags: 'i', debug: true, enabled: true }],
+      maxHistorySize: expect.any(Number),
+      moveHistory: expect.any(Array)
+    }));
     expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'regex', value: expect.any(RegExp), destination: 'Journal', debug: true, enabled: true }]);
     expect(reorganizeSpy).toHaveBeenCalledTimes(3);
 
     await fireEvent.click(screen.getByText('Remove'));
     await flushPromises();
     expect(plugin.saveData).toHaveBeenCalledTimes(9);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith(expect.objectContaining({
+      rules: [],
+      maxHistorySize: expect.any(Number),
+      moveHistory: expect.any(Array)
+    }));
     expect((plugin as any).rules).toEqual([]);
     expect(reorganizeSpy).toHaveBeenCalledTimes(3);
     expect((Notice as jest.Mock)).not.toHaveBeenCalled();
@@ -361,7 +397,11 @@ describe('settings UI', () => {
     expect(valueInput.value).toBe('#daily');
     expect(plugin.settings.rules[0]).toEqual({ key: '', value: '#daily', destination: '', matchType: 'equals', debug: false, enabled: false });
     expect(plugin.saveData).toHaveBeenCalledTimes(2);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '#daily', destination: '', matchType: 'equals', debug: false, enabled: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith(expect.objectContaining({
+      rules: [{ key: '', value: '#daily', destination: '', matchType: 'equals', debug: false, enabled: false }],
+      maxHistorySize: expect.any(Number),
+      moveHistory: expect.any(Array)
+    }));
 
     fileCaches.set('Ideas.md', { tags: ['#ideas'] });
     markdownFiles.push({ path: 'Ideas.md' });
@@ -376,7 +416,11 @@ describe('settings UI', () => {
     expect(valueInput.value).toBe('#daily #ideas');
     expect(plugin.settings.rules[0]).toEqual({ key: '', value: '#daily #ideas', destination: '', matchType: 'equals', debug: false, enabled: false });
     expect(plugin.saveData).toHaveBeenCalledTimes(3);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '#daily #ideas', destination: '', matchType: 'equals', debug: false, enabled: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith(expect.objectContaining({
+      rules: [{ key: '', value: '#daily #ideas', destination: '', matchType: 'equals', debug: false, enabled: false }],
+      maxHistorySize: expect.any(Number),
+      moveHistory: expect.any(Array)
+    }));
 
     await fireEvent.click(tagButton);
     const thirdModal = (FuzzySuggestModal as any).__instances.pop();
@@ -387,7 +431,11 @@ describe('settings UI', () => {
     expect(valueInput.value).toBe('#ideas');
     expect(plugin.settings.rules[0]).toEqual({ key: '', value: '#ideas', destination: '', matchType: 'equals', debug: false, enabled: false });
     expect(plugin.saveData).toHaveBeenCalledTimes(4);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: '', value: '#ideas', destination: '', matchType: 'equals', debug: false, enabled: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith(expect.objectContaining({
+      rules: [{ key: '', value: '#ideas', destination: '', matchType: 'equals', debug: false, enabled: false }],
+      maxHistorySize: expect.any(Number),
+      moveHistory: expect.any(Array)
+    }));
   });
 
   it('allows selecting frontmatter keys to populate the key field', async () => {
@@ -408,7 +456,11 @@ describe('settings UI', () => {
     expect(keyInput.value).toBe('category');
     expect(plugin.settings.rules[0]).toEqual({ key: 'category', value: '', destination: '', matchType: 'equals', debug: false, enabled: false });
     expect(plugin.saveData).toHaveBeenCalledTimes(2);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'category', value: '', destination: '', matchType: 'equals', debug: false, enabled: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith(expect.objectContaining({
+      rules: [{ key: 'category', value: '', destination: '', matchType: 'equals', debug: false, enabled: false }],
+      maxHistorySize: expect.any(Number),
+      moveHistory: expect.any(Array)
+    }));
 
     fileCaches.set('Ideas.md', { tags: ['#ideas'], frontmatter: { topic: 'ideas' } });
     markdownFiles.push({ path: 'Ideas.md' });
@@ -425,7 +477,11 @@ describe('settings UI', () => {
     expect(keyInput.value).toBe('topic');
     expect(plugin.settings.rules[0]).toEqual({ key: 'topic', value: '', destination: '', matchType: 'equals', debug: false, enabled: false });
     expect(plugin.saveData).toHaveBeenCalledTimes(3);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'topic', value: '', destination: '', matchType: 'equals', debug: false, enabled: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith(expect.objectContaining({
+      rules: [{ key: 'topic', value: '', destination: '', matchType: 'equals', debug: false, enabled: false }],
+      maxHistorySize: expect.any(Number),
+      moveHistory: expect.any(Array)
+    }));
   });
 
   it('debounces text input saves and reorganizes on demand', async () => {
@@ -440,7 +496,11 @@ describe('settings UI', () => {
     await jest.runOnlyPendingTimersAsync();
     await Promise.resolve();
     expect(plugin.saveData).toHaveBeenCalledTimes(2);
-    expect(plugin.saveData).toHaveBeenLastCalledWith({ rules: [{ key: 'tag', value: '', destination: '', matchType: 'equals', debug: false, enabled: false }] });
+    expect(plugin.saveData).toHaveBeenLastCalledWith(expect.objectContaining({
+      rules: [{ key: 'tag', value: '', destination: '', matchType: 'equals', debug: false, enabled: false }],
+      maxHistorySize: expect.any(Number),
+      moveHistory: expect.any(Array)
+    }));
 
     await fireEvent.click(screen.getByText('Apply now'));
     await flushPromises();

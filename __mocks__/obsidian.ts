@@ -169,12 +169,20 @@ export class FuzzySuggestModal<T> extends Modal {
 }
 
 export class TFile {
-	path: string = '';
-	name: string = '';
-	basename: string = '';
-	extension: string = '';
+	path: string;
+	name: string;
+	basename: string;
+	extension: string;
 	stat: any = {};
 	vault: any = {};
+
+	constructor(path?: string) {
+		this.path = path || '';
+		this.name = path ? path.split('/').pop()! : '';
+		const parts = this.name.split('.');
+		this.basename = parts.length > 1 ? parts.slice(0, -1).join('.') : this.name;
+		this.extension = parts.length > 1 ? parts.pop()! : '';
+	}
 }
 
 export class TAbstractFile {
