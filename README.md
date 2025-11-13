@@ -36,6 +36,25 @@ Vault Organizer listens for vault changes and applies the rules when:
 
 If a matching rule has a non-empty destination and Debug is off, the plugin moves the note into that folder. When Debug is on, a notice appears instead (e.g., `DEBUG: NoteTitle would be moved to Vault/Projects/In Progress`).
 
+### Move history and undo
+
+Vault Organizer tracks the history of automatic moves to provide a safety net for your file organization:
+
+- **Automatic tracking** – Every time the plugin successfully moves a note, it records the move (timestamp, original path, new path, and which rule triggered it).
+- **Move history** – By default, the last 50 moves are kept. Use the **View move history** command from the command palette to see all tracked moves in chronological order with the most recent at the top.
+- **Undo last move** – If the plugin moved a note to the wrong location, run **Undo last automatic move** from the command palette. This command:
+  - Moves the file back to its original location
+  - Creates any necessary folders automatically
+  - Removes the move from the history
+  - Shows an error if the file no longer exists or if another file already occupies the original location
+- **Clear history** – The move history modal includes a **Clear History** button to remove all tracked moves if needed.
+
+**Important notes:**
+- Only automatic moves triggered by rules are tracked. Manual file moves you perform in Obsidian are not recorded.
+- The undo command only works for the most recent move in the history. You cannot undo older moves directly, but you can view them in the history modal.
+- If a file has been moved multiple times, undoing will only reverse the last move, not all previous moves.
+- Move history is stored in the plugin's data file and persists across Obsidian sessions.
+
 ## Building and installing from source
 
 1. Install dependencies with `npm install`.

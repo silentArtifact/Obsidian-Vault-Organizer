@@ -33,12 +33,24 @@ import {
     validatePath,
 } from './src/pathSanitization';
 
+interface MoveHistoryEntry {
+    timestamp: number;
+    fileName: string;
+    fromPath: string;
+    toPath: string;
+    ruleKey: string;
+}
+
 interface VaultOrganizerSettings {
     rules: SerializedFrontmatterRule[];
+    moveHistory: MoveHistoryEntry[];
+    maxHistorySize: number;
 }
 
 const DEFAULT_SETTINGS: VaultOrganizerSettings = {
     rules: [],
+    moveHistory: [],
+    maxHistorySize: 50,
 };
 
 type RuleTestResult = {
@@ -117,6 +129,22 @@ export default class VaultOrganizer extends Plugin {
             },
         });
 
+        this.addCommand({
+            id: 'obsidian-vault-organizer-undo-last-move',
+            name: 'Undo last automatic move',
+            callback: async () => {
+                await this.undoLastMove();
+            },
+        });
+
+        this.addCommand({
+            id: 'obsidian-vault-organizer-view-history',
+            name: 'View move history',
+            callback: () => {
+                new MoveHistoryModal(this.app, this).open();
+            },
+        });
+
         // This adds a settings tab so the user can configure various aspects of the plugin
         this.ruleSettingTab = new RuleSettingTab(this.app, this);
         this.addSettingTab(this.ruleSettingTab);
@@ -135,6 +163,8 @@ export default class VaultOrganizer extends Plugin {
             ...DEFAULT_SETTINGS,
             ...loaded,
             rules,
+            moveHistory: Array.isArray(loaded?.moveHistory) ? loaded.moveHistory : [],
+            maxHistorySize: loaded?.maxHistorySize ?? DEFAULT_SETTINGS.maxHistorySize,
         };
     }
 
@@ -181,6 +211,79 @@ export default class VaultOrganizer extends Plugin {
 
     getRuleErrorForIndex(index: number): FrontmatterRuleDeserializationError | undefined {
         return this.ruleParseErrors.find(error => error.index === index);
+    }
+
+    private async recordMove(fromPath: string, toPath: string, fileName: string, ruleKey: string): Promise<void> {
+        const entry: MoveHistoryEntry = {
+            timestamp: Date.now(),
+            fileName,
+            fromPath,
+            toPath,
+            ruleKey,
+        };
+
+        this.settings.moveHistory.unshift(entry);
+
+        // Trim history to max size
+        if (this.settings.moveHistory.length > this.settings.maxHistorySize) {
+            this.settings.moveHistory = this.settings.moveHistory.slice(0, this.settings.maxHistorySize);
+        }
+
+        await this.saveSettings();
+    }
+
+    async undoLastMove(): Promise<void> {
+        if (this.settings.moveHistory.length === 0) {
+            new Notice('No moves to undo.');
+            return;
+        }
+
+        const lastMove = this.settings.moveHistory[0];
+        const currentFile = this.app.vault.getAbstractFileByPath(lastMove.toPath);
+
+        if (!currentFile) {
+            new Notice(`Cannot undo: File no longer exists at ${lastMove.toPath}`);
+            // Remove from history since file doesn't exist
+            this.settings.moveHistory.shift();
+            await this.saveSettings();
+            return;
+        }
+
+        if (!(currentFile instanceof TFile)) {
+            new Notice(`Cannot undo: ${lastMove.toPath} is not a file.`);
+            this.settings.moveHistory.shift();
+            await this.saveSettings();
+            return;
+        }
+
+        // Check if destination already exists
+        const destinationExists = this.app.vault.getAbstractFileByPath(lastMove.fromPath);
+        if (destinationExists) {
+            new Notice(`Cannot undo: A file already exists at ${lastMove.fromPath}`);
+            return;
+        }
+
+        try {
+            // Extract folder path from the original location
+            const lastSlashIndex = lastMove.fromPath.lastIndexOf('/');
+            if (lastSlashIndex > 0) {
+                const folderPath = lastMove.fromPath.substring(0, lastSlashIndex);
+                await this.ensureFolderExists(folderPath);
+            }
+
+            // Perform the undo (move back to original location)
+            await this.app.fileManager.renameFile(currentFile, lastMove.fromPath);
+
+            // Remove from history
+            this.settings.moveHistory.shift();
+            await this.saveSettings();
+
+            new Notice(`Undone: Moved ${lastMove.fileName} back to ${lastMove.fromPath}`);
+        } catch (err) {
+            const categorized = categorizeError(err, lastMove.toPath, 'move', lastMove.fromPath);
+            new Notice(categorized.getUserMessage());
+            console.error('[Vault Organizer] Undo failed:', err);
+        }
     }
 
     private async ensureFolderExists(folderPath: string): Promise<void> {
@@ -277,8 +380,11 @@ export default class VaultOrganizer extends Plugin {
 
             await this.ensureFolderExists(destinationFolder);
 
+            const oldPath = file.path;
             try {
                 await this.app.fileManager.renameFile(file, newPath);
+                // Record successful move in history
+                await this.recordMove(oldPath, newPath, file.name, rule.key);
             } catch (err) {
                 // Categorize the rename error for better user feedback
                 const categorized = categorizeError(err, file.path, 'move', newPath);
@@ -980,6 +1086,115 @@ class TestAllRulesModal extends Modal {
         const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
         buttonContainer.style.marginTop = '1.5em';
         buttonContainer.style.textAlign = 'right';
+
+        const closeButton = buttonContainer.createEl('button', { text: 'Close' });
+        closeButton.onclick = () => this.close();
+    }
+
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
+    }
+}
+
+class MoveHistoryModal extends Modal {
+    constructor(app: App, private readonly plugin: VaultOrganizer) {
+        super(app);
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+
+        contentEl.createEl('h2', { text: 'Move History' });
+
+        if (this.plugin.settings.moveHistory.length === 0) {
+            contentEl.createEl('p', { text: 'No move history yet.' });
+        } else {
+            contentEl.createEl('p', {
+                text: `Showing ${this.plugin.settings.moveHistory.length} of last ${this.plugin.settings.maxHistorySize} moves.`,
+            });
+
+            const historyContainer = contentEl.createDiv({ cls: 'vault-organizer-history-container' });
+            historyContainer.style.maxHeight = '500px';
+            historyContainer.style.overflowY = 'auto';
+            historyContainer.style.marginTop = '1em';
+
+            this.plugin.settings.moveHistory.forEach((entry, index) => {
+                const entryEl = historyContainer.createDiv({ cls: 'vault-organizer-history-item' });
+                entryEl.style.marginBottom = '1em';
+                entryEl.style.padding = '0.8em';
+                entryEl.style.border = '1px solid var(--background-modifier-border)';
+                entryEl.style.borderRadius = '4px';
+                entryEl.style.position = 'relative';
+
+                // Highlight the most recent move
+                if (index === 0) {
+                    entryEl.style.backgroundColor = 'var(--background-secondary-alt)';
+                    entryEl.style.borderColor = 'var(--interactive-accent)';
+                }
+
+                const headerEl = entryEl.createDiv();
+                headerEl.style.marginBottom = '0.5em';
+                headerEl.style.fontWeight = 'bold';
+
+                const date = new Date(entry.timestamp);
+                const timeStr = date.toLocaleString();
+
+                if (index === 0) {
+                    headerEl.createEl('span', { text: '🔄 Most Recent: ', cls: 'vault-organizer-recent-label' });
+                }
+                headerEl.createSpan({ text: entry.fileName });
+
+                const timeEl = entryEl.createDiv();
+                timeEl.style.fontSize = '0.9em';
+                timeEl.style.color = 'var(--text-muted)';
+                timeEl.style.marginBottom = '0.5em';
+                timeEl.textContent = `⏰ ${timeStr}`;
+
+                const fromEl = entryEl.createDiv();
+                fromEl.createEl('strong', { text: 'From: ' });
+                fromEl.createSpan({ text: entry.fromPath });
+
+                const toEl = entryEl.createDiv();
+                toEl.createEl('strong', { text: 'To: ' });
+                toEl.createSpan({ text: entry.toPath });
+
+                const ruleEl = entryEl.createDiv();
+                ruleEl.createEl('strong', { text: 'Rule: ' });
+                ruleEl.createSpan({ text: entry.ruleKey || '(unknown)' });
+
+                // Add undo button for most recent move only
+                if (index === 0) {
+                    const undoButtonEl = entryEl.createDiv();
+                    undoButtonEl.style.marginTop = '0.8em';
+                    const undoButton = undoButtonEl.createEl('button', { text: 'Undo This Move' });
+                    undoButton.style.backgroundColor = 'var(--interactive-accent)';
+                    undoButton.style.color = 'var(--text-on-accent)';
+                    undoButton.style.padding = '0.4em 0.8em';
+                    undoButton.style.border = 'none';
+                    undoButton.style.borderRadius = '4px';
+                    undoButton.style.cursor = 'pointer';
+                    undoButton.onclick = async () => {
+                        this.close();
+                        await this.plugin.undoLastMove();
+                    };
+                }
+            });
+        }
+
+        const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
+        buttonContainer.style.marginTop = '1.5em';
+        buttonContainer.style.textAlign = 'right';
+
+        const clearButton = buttonContainer.createEl('button', { text: 'Clear History' });
+        clearButton.style.marginRight = '0.5em';
+        clearButton.onclick = async () => {
+            this.plugin.settings.moveHistory = [];
+            await this.plugin.saveSettings();
+            new Notice('Move history cleared.');
+            this.close();
+        };
 
         const closeButton = buttonContainer.createEl('button', { text: 'Close' });
         closeButton.onclick = () => this.close();
