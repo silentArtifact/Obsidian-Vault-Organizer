@@ -234,11 +234,11 @@ export default class VaultOrganizer extends Plugin {
             allowAbsolute: false,
         });
 
-        if (!validation.valid) {
-            throw validation.error;
+        if (!validation.valid || !validation.sanitizedPath) {
+            throw validation.error || new Error('Path validation failed');
         }
 
-        const sanitizedPath = validation.sanitizedPath!;
+        const sanitizedPath = validation.sanitizedPath;
         const segments = sanitizedPath.split('/').filter(Boolean);
         if (!segments.length) {
             return;
@@ -285,11 +285,11 @@ export default class VaultOrganizer extends Plugin {
 
             // Validate the destination path before attempting to move
             const destinationValidation = validateDestinationPath(trimmedDestination);
-            if (!destinationValidation.valid) {
-                throw destinationValidation.error;
+            if (!destinationValidation.valid || !destinationValidation.sanitizedPath) {
+                throw destinationValidation.error || new Error('Destination path validation failed');
             }
 
-            const destinationFolder = destinationValidation.sanitizedPath!;
+            const destinationFolder = destinationValidation.sanitizedPath;
 
             // Validate the full destination path (folder + filename)
             const fullPathValidation = validatePath(`${destinationFolder}/${file.name}`, {
@@ -297,11 +297,11 @@ export default class VaultOrganizer extends Plugin {
                 allowAbsolute: false,
             });
 
-            if (!fullPathValidation.valid) {
-                throw fullPathValidation.error;
+            if (!fullPathValidation.valid || !fullPathValidation.sanitizedPath) {
+                throw fullPathValidation.error || new Error('Full path validation failed');
             }
 
-            const newPath = fullPathValidation.sanitizedPath!;
+            const newPath = fullPathValidation.sanitizedPath;
             intendedDestination = newPath;
 
             if (file.path === newPath) {
@@ -398,7 +398,7 @@ export default class VaultOrganizer extends Plugin {
                 checkReservedNames: true,
             });
 
-            if (!newPathValidation.valid) {
+            if (!newPathValidation.valid || !newPathValidation.sanitizedPath) {
                 const warnings = [
                     ...(destinationValidation.warnings ?? []),
                     ...(newPathValidation.warnings ?? []),
@@ -413,7 +413,7 @@ export default class VaultOrganizer extends Plugin {
                 continue;
             }
 
-            const sanitizedNewPath = newPathValidation.sanitizedPath!;
+            const sanitizedNewPath = newPathValidation.sanitizedPath;
             if (file.path !== sanitizedNewPath) {
                 const warnings = [
                     ...(destinationValidation.warnings ?? []),

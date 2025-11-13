@@ -87,7 +87,7 @@ export class TestAllRulesModal extends Modal {
 
                     const toEl = resultEl.createDiv();
                     toEl.createEl('strong', { text: 'To: ' });
-                    toEl.createSpan({ text: result.newPath! });
+                    toEl.createSpan({ text: result.newPath || '(unknown)' });
 
                     const ruleEl = resultEl.createDiv();
                     ruleEl.createEl('strong', { text: 'Rule: ' });

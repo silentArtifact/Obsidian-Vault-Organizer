@@ -275,10 +275,10 @@ export function sanitizePath(
 	options: PathValidationOptions = {}
 ): string {
 	const result = validatePath(path, options);
-	if (!result.valid) {
-		throw result.error;
+	if (!result.valid || !result.sanitizedPath) {
+		throw result.error || new Error('Path validation failed');
 	}
-	return result.sanitizedPath!;
+	return result.sanitizedPath;
 }
 
 /**
