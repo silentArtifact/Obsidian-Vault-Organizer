@@ -74,6 +74,34 @@ describe('Additional Coverage Tests', () => {
 			// Verify the move history was cleared
 			expect(plugin.settings.moveHistory.length).toBe(0);
 		});
+
+		it('should clear history when undo fails due to existing file at destination', async () => {
+			const mockFile = new TFile('new/test.md');
+			const mockConflictingFile = new TFile('old/test.md');
+
+			plugin.settings.moveHistory = [
+				{
+					timestamp: Date.now(),
+					fileName: 'test.md',
+					fromPath: 'old/test.md',
+					toPath: 'new/test.md',
+					ruleKey: 'status',
+				},
+			];
+
+			// First call: file exists at current location
+			// Second call: conflicting file exists at original location
+			mockApp.vault.getAbstractFileByPath
+				.mockReturnValueOnce(mockFile)
+				.mockReturnValueOnce(mockConflictingFile);
+
+			await plugin.undoLastMove();
+
+			// Verify the move history was cleared even though undo couldn't proceed
+			expect(plugin.settings.moveHistory.length).toBe(0);
+			// Verify rename was not called
+			expect(mockApp.fileManager.renameFile).not.toHaveBeenCalled();
+		});
 	});
 
 	describe('applyRulesToFile debug mode with empty destination', () => {

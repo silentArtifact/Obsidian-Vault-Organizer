@@ -266,7 +266,9 @@ describe('Undo Functionality', () => {
             expect(Notice).toHaveBeenCalledWith(
                 expect.stringContaining('A file already exists')
             );
-            expect(plugin.settings.moveHistory).toHaveLength(1); // Not removed
+            // History should be cleared even though undo failed - prevents user from being stuck
+            // with an un-undoable move that they can never get past
+            expect(plugin.settings.moveHistory).toHaveLength(0);
         });
 
         it('should create necessary folders when undoing', async () => {

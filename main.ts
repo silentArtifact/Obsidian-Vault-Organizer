@@ -137,10 +137,19 @@ export default class VaultOrganizer extends Plugin {
         this.ruleSettingTab?.refreshWarnings();
     }
 
+    /**
+     * Saves plugin settings and refreshes rule parsing without reorganizing files.
+     * Use this when you want to persist settings changes without triggering file moves.
+     */
     async saveSettingsWithoutReorganizing() {
         await this.persistSettingsAndRefreshRules();
     }
 
+    /**
+     * Saves plugin settings, refreshes rule parsing, and reorganizes all markdown files.
+     * This will apply all enabled rules to all markdown files in the vault.
+     * Use with caution as it can move many files at once.
+     */
     async saveSettingsAndRefreshRules() {
         await this.persistSettingsAndRefreshRules();
         await this.reorganizeAllMarkdownFiles();
@@ -169,6 +178,13 @@ export default class VaultOrganizer extends Plugin {
         await this.saveSettings();
     }
 
+    /**
+     * Undoes the most recent file move from the move history.
+     * Moves the file back to its original location and removes the entry from history.
+     * If the undo operation fails, the history entry is still removed to prevent repeated attempts.
+     *
+     * @returns Promise that resolves when the undo operation completes
+     */
     async undoLastMove(): Promise<void> {
         if (this.settings.moveHistory.length === 0) {
             new Notice('No moves to undo.');
@@ -197,6 +213,9 @@ export default class VaultOrganizer extends Plugin {
         const destinationExists = this.app.vault.getAbstractFileByPath(lastMove.fromPath);
         if (destinationExists) {
             new Notice(`Cannot undo: A file already exists at ${lastMove.fromPath}`);
+            // Remove from history since it cannot be undone
+            this.settings.moveHistory.shift();
+            await this.saveSettings();
             return;
         }
 
@@ -351,6 +370,13 @@ export default class VaultOrganizer extends Plugin {
         }
     }
 
+    /**
+     * Tests all enabled rules against all markdown files in the vault without actually moving files.
+     * Returns a preview of what files would be moved and where they would go.
+     * Useful for validating rules before enabling them or before bulk operations.
+     *
+     * @returns Array of test results showing which files would be moved, including any errors or warnings
+     */
     testAllRules(): RuleTestResult[] {
         const markdownFiles = this.app.vault.getMarkdownFiles?.() || [];
         const results: RuleTestResult[] = [];

@@ -2,6 +2,11 @@ import { App, TFile } from 'obsidian';
 
 export type FrontmatterMatchType = 'equals' | 'contains' | 'starts-with' | 'ends-with' | 'regex';
 
+/**
+ * Keys that should not be accessed in frontmatter to prevent prototype pollution.
+ */
+const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 export interface FrontmatterRule {
     key: string;
     matchType: FrontmatterMatchType;
@@ -48,6 +53,10 @@ export function matchFrontmatter(
 
     return rules.find(rule => {
         if (rule.enabled === false) {
+            return false;
+        }
+        // Prevent prototype pollution
+        if (DANGEROUS_KEYS.has(rule.key)) {
             return false;
         }
         const value = cacheFrontmatter[rule.key];
