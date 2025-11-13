@@ -19,6 +19,7 @@ import {
     deserializeFrontmatterRules,
     FrontmatterRuleDeserializationError,
     matchFrontmatter,
+    matchFrontmatterWithDetails,
     serializeFrontmatterRules,
     requiresValue,
     hasValidValue,
@@ -213,6 +214,17 @@ export default class VaultOrganizer extends Plugin {
         return this.ruleParseErrors.find(error => error.index === index);
     }
 
+    private getMatchTypeLabel(matchType: FrontmatterMatchType): string {
+        const labels: Record<FrontmatterMatchType, string> = {
+            'equals': '==',
+            'contains': 'contains',
+            'starts-with': 'starts with',
+            'ends-with': 'ends with',
+            'regex': 'matches',
+        };
+        return labels[matchType];
+    }
+
     private async recordMove(fromPath: string, toPath: string, fileName: string, ruleKey: string): Promise<void> {
         const entry: MoveHistoryEntry = {
             timestamp: Date.now(),
@@ -333,11 +345,12 @@ export default class VaultOrganizer extends Plugin {
                 return;
             }
 
-            const rule = matchFrontmatter.call(this, file, this.rules, frontmatter);
-            if (!rule) {
+            const matchResult = matchFrontmatterWithDetails.call(this, file, this.rules, frontmatter);
+            if (!matchResult) {
                 return;
             }
 
+            const rule = matchResult.rule;
             const trimmedDestination = rule.destination.trim();
             if (!trimmedDestination) {
                 if (rule.debug) {
@@ -374,7 +387,18 @@ export default class VaultOrganizer extends Plugin {
 
             if (rule.debug) {
                 const vaultName = this.app.vault.getName();
-                new Notice(`DEBUG: ${file.basename} would be moved to ${vaultName}/${destinationFolder}`);
+                const matchTypeLabel = this.getMatchTypeLabel(matchResult.matchType);
+                const rulePattern = rule.value instanceof RegExp
+                    ? `/${rule.value.source}/${rule.value.flags}`
+                    : `"${rule.value}"`;
+
+                const debugMessage = [
+                    `DEBUG: ${file.basename} would be moved to ${vaultName}/${destinationFolder}`,
+                    `  ✓ Matched: ${matchResult.matchedKey} ${matchTypeLabel} ${rulePattern}`,
+                    `  ✓ Found value: "${matchResult.matchedValue}"`
+                ].join('\n');
+
+                new Notice(debugMessage, 8000); // Show for 8 seconds
                 return;
             }
 

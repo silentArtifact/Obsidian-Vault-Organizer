@@ -204,7 +204,11 @@ describe('handleFileChange', () => {
     const file = createTFile('Temp/Test.md');
     await handle(file);
     expect(renameFile).not.toHaveBeenCalled();
-    expect(Notice).toHaveBeenCalledWith('DEBUG: Test would be moved to Vault/Journal');
+    const noticeCall = (Notice as jest.Mock).mock.calls[0];
+    expect(noticeCall[0]).toContain('DEBUG: Test would be moved to Vault/Journal');
+    expect(noticeCall[0]).toContain('Matched: tag == "journal"');
+    expect(noticeCall[0]).toContain('Found value: "journal"');
+    expect(noticeCall[1]).toBe(8000); // timeout
   });
 
   it('ignores non-matching or same-path files', async () => {

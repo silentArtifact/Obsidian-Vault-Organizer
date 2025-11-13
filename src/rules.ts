@@ -24,6 +24,99 @@ export interface SerializedFrontmatterRule {
     caseInsensitive?: boolean;
 }
 
+export interface FrontmatterMatchResult {
+    rule: FrontmatterRule;
+    matchedKey: string;
+    matchedValue: string;
+    frontmatterValue: unknown;
+    matchType: FrontmatterMatchType;
+}
+
+/**
+ * Finds the first matching rule for a file's frontmatter with detailed match information.
+ * Iterates through rules and tests each against the file's frontmatter properties.
+ * Supports multiple match types including equals, contains, starts-with, ends-with, and regex.
+ * For array frontmatter values, checks if any element matches the rule criteria.
+ *
+ * @param this - Context object containing the Obsidian app instance for metadata access
+ * @param file - The file to check frontmatter for
+ * @param rules - Array of frontmatter rules to test against
+ * @param frontmatter - Optional cached frontmatter to avoid re-reading
+ * @returns Match result with rule and details about what matched, or undefined if no match
+ */
+export function matchFrontmatterWithDetails(
+    this: { app: App },
+    file: TFile,
+    rules: FrontmatterRule[],
+    frontmatter?: Record<string, unknown>
+): FrontmatterMatchResult | undefined {
+    const cacheFrontmatter = frontmatter ?? this.app.metadataCache.getFileCache(file)?.frontmatter;
+    if (!cacheFrontmatter) {
+        return undefined;
+    }
+
+    for (const rule of rules) {
+        if (rule.enabled === false) {
+            continue;
+        }
+        const value = cacheFrontmatter[rule.key];
+        if (value === undefined || value === null) {
+            continue;
+        }
+
+        const isArrayValue = Array.isArray(value);
+        const values = isArrayValue ? value : [value];
+        const matchType: FrontmatterMatchType = rule.matchType ?? 'equals';
+
+        if (matchType === 'regex') {
+            if (!(rule.value instanceof RegExp)) {
+                continue;
+            }
+            const regex = rule.value;
+            for (const item of values) {
+                const valueStr = String(item);
+                regex.lastIndex = 0;
+                if (regex.test(valueStr)) {
+                    return {
+                        rule,
+                        matchedKey: rule.key,
+                        matchedValue: valueStr,
+                        frontmatterValue: value,
+                        matchType,
+                    };
+                }
+            }
+            continue;
+        }
+
+        const ruleCandidates = getRuleCandidates(String(rule.value), isArrayValue);
+        const normalizedCandidates =
+            matchType === 'contains' || matchType === 'starts-with' || matchType === 'ends-with'
+                ? ruleCandidates.filter(candidate => candidate.length > 0)
+                : ruleCandidates;
+        if (!normalizedCandidates.length) {
+            continue;
+        }
+
+        for (const item of values) {
+            const valueStr = String(item);
+            for (const candidate of normalizedCandidates) {
+                if (matchByType(valueStr, candidate, matchType, rule.caseInsensitive)) {
+                    return {
+                        rule,
+                        matchedKey: rule.key,
+                        matchedValue: valueStr,
+                        frontmatterValue: value,
+                        matchType,
+                    };
+                }
+            }
+        }
+    }
+
+    return undefined;
+}
+
 /**
  * Finds the first matching rule for a file's frontmatter.
  * Iterates through rules and tests each against the file's frontmatter properties.
@@ -33,6 +126,7 @@ export interface SerializedFrontmatterRule {
  * @param this - Context object containing the Obsidian app instance for metadata access
  * @param file - The file to check frontmatter for
  * @param rules - Array of frontmatter rules to test against
+ * @param frontmatter - Optional cached frontmatter to avoid re-reading
  * @returns The first matching rule, or undefined if no rules match or file has no frontmatter
  */
 export function matchFrontmatter(
@@ -41,50 +135,8 @@ export function matchFrontmatter(
     rules: FrontmatterRule[],
     frontmatter?: Record<string, unknown>
 ): FrontmatterRule | undefined {
-    const cacheFrontmatter = frontmatter ?? this.app.metadataCache.getFileCache(file)?.frontmatter;
-    if (!cacheFrontmatter) {
-        return undefined;
-    }
-
-    return rules.find(rule => {
-        if (rule.enabled === false) {
-            return false;
-        }
-        const value = cacheFrontmatter[rule.key];
-        if (value === undefined || value === null) {
-            return false;
-        }
-
-        const isArrayValue = Array.isArray(value);
-        const values = isArrayValue ? value : [value];
-        const matchType: FrontmatterMatchType = rule.matchType ?? 'equals';
-
-        if (matchType === 'regex') {
-            if (!(rule.value instanceof RegExp)) {
-                return false;
-            }
-            const regex = rule.value;
-            return values.some(item => {
-                const valueStr = String(item);
-                regex.lastIndex = 0;
-                return regex.test(valueStr);
-            });
-        }
-
-        const ruleCandidates = getRuleCandidates(String(rule.value), isArrayValue);
-        const normalizedCandidates =
-            matchType === 'contains' || matchType === 'starts-with' || matchType === 'ends-with'
-                ? ruleCandidates.filter(candidate => candidate.length > 0)
-                : ruleCandidates;
-        if (!normalizedCandidates.length) {
-            return false;
-        }
-
-        return values.some(item => {
-            const valueStr = String(item);
-            return normalizedCandidates.some(candidate => matchByType(valueStr, candidate, matchType, rule.caseInsensitive));
-        });
-    });
+    const result = matchFrontmatterWithDetails.call(this, file, rules, frontmatter);
+    return result?.rule;
 }
 
 /**

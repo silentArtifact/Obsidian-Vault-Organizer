@@ -34,7 +34,20 @@ Vault Organizer listens for vault changes and applies the rules when:
 - A Markdown file is renamed or moved.
 - Obsidian finishes reading updated frontmatter metadata for a Markdown file.
 
-If a matching rule has a non-empty destination and Debug is off, the plugin moves the note into that folder. When Debug is on, a notice appears instead (e.g., `DEBUG: NoteTitle would be moved to Vault/Projects/In Progress`).
+If a matching rule has a non-empty destination and Debug is off, the plugin moves the note into that folder. When Debug is on, a detailed notice appears showing:
+- Where the file would be moved
+- Which frontmatter key matched
+- The actual value found in the note
+- The match type used (equals, contains, regex, etc.)
+
+Example debug notice:
+```
+DEBUG: MyNote would be moved to Vault/Projects/Active
+  ✓ Matched: status == "in-progress"
+  ✓ Found value: "in-progress"
+```
+
+This helps you understand exactly why a rule is triggering and makes it easier to fine-tune your rules.
 
 ### Move history and undo
 
