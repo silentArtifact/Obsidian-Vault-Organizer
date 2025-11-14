@@ -130,7 +130,7 @@ jest.mock('obsidian', () => {
   };
 }, { virtual: true });
 
-import { MoveHistoryModal, TestAllRulesModal } from '../src/ui/modals';
+import { MoveHistoryModal, TestAllRulesModal, RuleTagPickerModal, RuleFrontmatterKeyPickerModal } from '../src/ui/modals';
 import VaultOrganizer from '../main';
 import type { MoveHistoryEntry, RuleTestResult } from '../src/types';
 
@@ -662,5 +662,129 @@ describe('TestAllRulesModal', () => {
 
     expect(modal.contentEl.textContent).toContain('Warnings:');
     expect(modal.contentEl.textContent).toContain('Warning 1; Warning 2');
+  });
+});
+
+describe('RuleTagPickerModal', () => {
+  let app: any;
+  let modal: RuleTagPickerModal;
+  let onSelectCallback: jest.Mock;
+
+  beforeEach(() => {
+    app = {
+      metadataCache: { on: jest.fn() },
+      fileManager: {},
+      vault: { on: jest.fn() },
+    };
+    onSelectCallback = jest.fn();
+  });
+
+  it('returns the provided tags from getItems', () => {
+    const tags = ['#tag1', '#tag2', '#tag3'];
+    modal = new RuleTagPickerModal(app, tags, onSelectCallback);
+
+    const items = modal.getItems();
+
+    expect(items).toEqual(tags);
+  });
+
+  it('returns tag text from getItemText', () => {
+    const tags = ['#myTag'];
+    modal = new RuleTagPickerModal(app, tags, onSelectCallback);
+
+    const text = modal.getItemText('#myTag');
+
+    expect(text).toBe('#myTag');
+  });
+
+  it('calls onSelect callback when item is chosen', () => {
+    const tags = ['#selected'];
+    modal = new RuleTagPickerModal(app, tags, onSelectCallback);
+
+    modal.onChooseItem('#selected');
+
+    expect(onSelectCallback).toHaveBeenCalledWith('#selected');
+  });
+
+  it('handles empty tags array', () => {
+    modal = new RuleTagPickerModal(app, [], onSelectCallback);
+
+    const items = modal.getItems();
+
+    expect(items).toEqual([]);
+  });
+
+  it('handles multiple tag selections', () => {
+    const tags = ['#tag1', '#tag2'];
+    modal = new RuleTagPickerModal(app, tags, onSelectCallback);
+
+    modal.onChooseItem('#tag1');
+    modal.onChooseItem('#tag2');
+
+    expect(onSelectCallback).toHaveBeenCalledTimes(2);
+    expect(onSelectCallback).toHaveBeenNthCalledWith(1, '#tag1');
+    expect(onSelectCallback).toHaveBeenNthCalledWith(2, '#tag2');
+  });
+});
+
+describe('RuleFrontmatterKeyPickerModal', () => {
+  let app: any;
+  let modal: RuleFrontmatterKeyPickerModal;
+  let onSelectCallback: jest.Mock;
+
+  beforeEach(() => {
+    app = {
+      metadataCache: { on: jest.fn() },
+      fileManager: {},
+      vault: { on: jest.fn() },
+    };
+    onSelectCallback = jest.fn();
+  });
+
+  it('returns the provided keys from getItems', () => {
+    const keys = ['status', 'category', 'priority'];
+    modal = new RuleFrontmatterKeyPickerModal(app, keys, onSelectCallback);
+
+    const items = modal.getItems();
+
+    expect(items).toEqual(keys);
+  });
+
+  it('returns key text from getItemText', () => {
+    const keys = ['myKey'];
+    modal = new RuleFrontmatterKeyPickerModal(app, keys, onSelectCallback);
+
+    const text = modal.getItemText('myKey');
+
+    expect(text).toBe('myKey');
+  });
+
+  it('calls onSelect callback when item is chosen', () => {
+    const keys = ['selectedKey'];
+    modal = new RuleFrontmatterKeyPickerModal(app, keys, onSelectCallback);
+
+    modal.onChooseItem('selectedKey');
+
+    expect(onSelectCallback).toHaveBeenCalledWith('selectedKey');
+  });
+
+  it('handles empty keys array', () => {
+    modal = new RuleFrontmatterKeyPickerModal(app, [], onSelectCallback);
+
+    const items = modal.getItems();
+
+    expect(items).toEqual([]);
+  });
+
+  it('handles multiple key selections', () => {
+    const keys = ['key1', 'key2', 'key3'];
+    modal = new RuleFrontmatterKeyPickerModal(app, keys, onSelectCallback);
+
+    modal.onChooseItem('key1');
+    modal.onChooseItem('key3');
+
+    expect(onSelectCallback).toHaveBeenCalledTimes(2);
+    expect(onSelectCallback).toHaveBeenNthCalledWith(1, 'key1');
+    expect(onSelectCallback).toHaveBeenNthCalledWith(2, 'key3');
   });
 });
