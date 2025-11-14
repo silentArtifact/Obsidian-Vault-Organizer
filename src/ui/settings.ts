@@ -6,9 +6,21 @@ import { requiresValue, hasValidValue } from '../rules';
 import { MATCH_TYPE_OPTIONS, normalizeSerializedRule } from '../types';
 import { RuleTagPickerModal, RuleFrontmatterKeyPickerModal, TestAllRulesModal } from './modals';
 
+/**
+ * Debounce delay in milliseconds for saving settings changes.
+ */
+const SETTINGS_SAVE_DEBOUNCE_MS = 300;
+
+/**
+ * Debounce delay in milliseconds for refreshing metadata cache.
+ * Higher value to reduce performance impact of frequent metadata updates.
+ */
+const METADATA_REFRESH_DEBOUNCE_MS = 1000;
+
 export class RuleSettingTab extends PluginSettingTab {
     plugin: VaultOrganizer;
     private debouncedSaveOnly: ReturnType<typeof debounce>;
+    private debouncedRefreshMetadata: ReturnType<typeof debounce>;
     private aggregatedTags: string[] = [];
     private frontmatterKeys: string[] = [];
 
@@ -17,12 +29,15 @@ export class RuleSettingTab extends PluginSettingTab {
         this.plugin = plugin;
         this.debouncedSaveOnly = debounce(async () => {
             await this.plugin.saveSettingsWithoutReorganizing();
-        }, 300);
+        }, SETTINGS_SAVE_DEBOUNCE_MS);
+        this.debouncedRefreshMetadata = debounce(() => {
+            this.refreshAggregatedTags();
+            this.refreshFrontmatterKeys();
+        }, METADATA_REFRESH_DEBOUNCE_MS);
         this.refreshAggregatedTags();
         this.refreshFrontmatterKeys();
         this.plugin.registerEvent(this.plugin.app.metadataCache.on('resolved', () => {
-            this.refreshAggregatedTags();
-            this.refreshFrontmatterKeys();
+            this.debouncedRefreshMetadata();
         }));
     }
 
