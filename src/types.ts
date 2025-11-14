@@ -42,6 +42,20 @@ export const MATCH_TYPE_OPTIONS: { value: FrontmatterMatchType; label: string }[
     { value: 'regex', label: 'Regular expression' },
 ];
 
+/**
+ * Normalizes a serialized frontmatter rule to ensure consistent structure and valid defaults.
+ * Handles migration from legacy isRegex format to matchType format, sets default values for
+ * required fields, and cleans up regex-specific fields when not in regex mode.
+ *
+ * This function:
+ * - Migrates legacy rules that used isRegex to the modern matchType field
+ * - Ensures all required fields (key, value, destination, enabled) have default values
+ * - Sets appropriate regex fields when matchType is 'regex'
+ * - Removes regex-specific fields (isRegex, flags) when matchType is not 'regex'
+ *
+ * @param rule - The serialized rule to normalize
+ * @returns A normalized copy of the rule with consistent structure and valid defaults
+ */
 export function normalizeSerializedRule(rule: SerializedFrontmatterRule): SerializedFrontmatterRule {
     const matchType: FrontmatterMatchType = rule.matchType ?? (rule.isRegex ? 'regex' : 'equals');
     const normalized: SerializedFrontmatterRule = {

@@ -36,6 +36,19 @@ export default class VaultOrganizer extends Plugin {
     private ruleParseErrors: FrontmatterRuleDeserializationError[] = [];
     private ruleSettingTab?: RuleSettingTab;
 
+    /**
+     * Called when the plugin is loaded. Initializes settings, registers event handlers,
+     * and sets up commands for reorganizing files and managing move history.
+     *
+     * Registers event handlers for:
+     * - File modifications, creations, and renames
+     * - Metadata cache changes
+     *
+     * Registers commands:
+     * - Reorganize notes based on frontmatter rules
+     * - Undo last automatic move
+     * - View move history
+     */
     async onload() {
         await this.loadSettings();
         this.updateRulesFromSettings();
@@ -88,10 +101,17 @@ export default class VaultOrganizer extends Plugin {
         this.addSettingTab(this.ruleSettingTab);
     }
 
+    /**
+     * Called when the plugin is unloaded. Performs any necessary cleanup operations.
+     */
     onunload() {
         // Plugin cleanup if needed
     }
 
+    /**
+     * Loads plugin settings from persistent storage and merges them with default values.
+     * Normalizes rule data and ensures move history doesn't exceed the configured maximum size.
+     */
     async loadSettings() {
         const loaded = await this.loadData();
         const rules = Array.isArray(loaded?.rules)
@@ -106,11 +126,20 @@ export default class VaultOrganizer extends Plugin {
         };
     }
 
+    /**
+     * Persists current plugin settings to storage.
+     */
     async saveSettings() {
         this.settings.rules = this.settings.rules.map(normalizeSerializedRule);
         await this.saveData(this.settings);
     }
 
+    /**
+     * Deserializes and updates frontmatter rules from the current settings.
+     * Parses rule definitions and separates valid rules from those with errors.
+     *
+     * @returns An object containing successfully parsed rules and any deserialization errors
+     */
     updateRulesFromSettings() {
         const { rules, successes, errors } = deserializeFrontmatterRules(this.settings.rules);
         this.rules = rules;
@@ -137,15 +166,29 @@ export default class VaultOrganizer extends Plugin {
         this.ruleSettingTab?.refreshWarnings();
     }
 
+    /**
+     * Saves settings and refreshes rule parsing without triggering automatic file reorganization.
+     * Use this when you want to persist settings changes but don't want files to be moved immediately.
+     */
     async saveSettingsWithoutReorganizing() {
         await this.persistSettingsAndRefreshRules();
     }
 
+    /**
+     * Saves settings, refreshes rule parsing, and triggers reorganization of all markdown files.
+     * This is the recommended method when rule changes should be applied immediately to existing files.
+     */
     async saveSettingsAndRefreshRules() {
         await this.persistSettingsAndRefreshRules();
         await this.reorganizeAllMarkdownFiles();
     }
 
+    /**
+     * Retrieves the parsing/deserialization error for a specific rule by its index.
+     *
+     * @param index - The zero-based index of the rule in the settings
+     * @returns The error object if the rule at this index failed to parse, undefined otherwise
+     */
     getRuleErrorForIndex(index: number): FrontmatterRuleDeserializationError | undefined {
         return this.ruleParseErrors.find(error => error.index === index);
     }
@@ -376,6 +419,13 @@ export default class VaultOrganizer extends Plugin {
         await this.saveSettings();
     }
 
+    /**
+     * Tests all enabled rules against all markdown files in the vault without executing moves.
+     * Useful for previewing what changes would be made by the current rule configuration.
+     *
+     * @returns An array of test results containing file paths, matching rules, and intended destinations,
+     *          including any validation errors that would prevent the move
+     */
     testAllRules(): RuleTestResult[] {
         const markdownFiles = this.app.vault.getMarkdownFiles?.() || [];
         const results: RuleTestResult[] = [];

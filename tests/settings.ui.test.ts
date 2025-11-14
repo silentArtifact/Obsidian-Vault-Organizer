@@ -187,6 +187,7 @@ jest.mock('obsidian', () => {
   return { Plugin, PluginSettingTab, Setting, Notice, debounce, FuzzySuggestModal, getAllTags, Modal };
 }, { virtual: true });
 
+import { TEST_MANIFEST } from './testUtils';
 import VaultOrganizer from '../main';
 import { screen, fireEvent } from '@testing-library/dom';
 
@@ -228,18 +229,7 @@ describe('settings UI', () => {
       fileManager: {},
       vault: { on: jest.fn(), getMarkdownFiles: jest.fn(() => markdownFiles) },
     } as any;
-    const manifest = {
-      id: 'obsidian-vault-organizer',
-      name: 'Vault Organizer',
-      version: '1.0.0',
-      minAppVersion: '1.0.0',
-      description: '',
-      author: '',
-      authorUrl: '',
-      dir: 'vault-organizer',
-      isDesktopOnly: false,
-    } as const;
-    plugin = new VaultOrganizer(app, manifest as any);
+    plugin = new VaultOrganizer(app, TEST_MANIFEST as any);
     plugin.saveData = jest.fn().mockResolvedValue(undefined);
     reorganizeSpy = jest
       .spyOn(plugin as any, 'reorganizeAllMarkdownFiles')

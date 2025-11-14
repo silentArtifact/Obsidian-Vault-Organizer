@@ -1,104 +1,8 @@
-jest.mock('obsidian', () => {
-  const noticeMock = jest.fn();
-  class TFile {
-    path: string;
-    name: string;
-    basename: string;
-    extension: string;
-    constructor(path: string) {
-      this.path = path;
-      this.name = path.split('/').pop()!;
-      const parts = this.name.split('.');
-      this.basename = parts.slice(0, -1).join('.') || this.name;
-      this.extension = parts.length > 1 ? parts.pop()! : '';
-    }
-  }
-  const debounce = <T extends (...args: any[]) => any>(fn: T, timeout = 0) => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let lastArgs: Parameters<T> | null = null;
-    const debounced: any = (...args: Parameters<T>) => {
-      lastArgs = args;
-      if (timer) {
-        clearTimeout(timer);
-      }
-      timer = setTimeout(() => {
-        timer = null;
-        lastArgs && fn(...lastArgs);
-      }, timeout);
-      return debounced;
-    };
-    debounced.cancel = () => {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      return debounced;
-    };
-    debounced.run = () => {
-      if (timer) {
-        clearTimeout(timer);
-        const args = lastArgs;
-        timer = null;
-        if (args) {
-          return fn(...args);
-        }
-      }
-    };
-    return debounced;
-  };
-
-  return {
-    App: class {},
-    Plugin: class {
-      app: any;
-      manifest: any;
-      constructor(app: any, manifest: any) {
-        this.app = app;
-        this.manifest = manifest;
-      }
-      loadData() { return Promise.resolve(undefined); }
-      saveData() { return Promise.resolve(); }
-      addSettingTab() {}
-      registerEvent() {}
-      addCommand() {}
-    },
-    TFile,
-    normalizePath: (p: string) => require('path').posix.normalize(p.replace(/\\/g, '/')),
-    Notice: noticeMock,
-    Modal: class {
-      app: any;
-      contentEl: any = {
-        empty: jest.fn(),
-        createEl: jest.fn(),
-        createDiv: jest.fn(),
-      };
-      open() {}
-      close() {}
-      onOpen() {}
-      onClose() {}
-    },
-    PluginSettingTab: class { constructor(app: any, plugin: any) {} },
-    Setting: class {
-      setName() { return this; }
-      setDesc() { return this; }
-      addText() { return this; }
-      addToggle() { return this; }
-      addButton() { return this; }
-    },
-    FuzzySuggestModal: class {
-      constructor(_app: any) {}
-      open() {}
-    },
-    TAbstractFile: class {},
-    debounce,
-    getAllTags: jest.fn(() => []),
-  };
-}, { virtual: true });
+import './setupObsidian';
+import { createMockFile, createMockVault, createMockMetadataCache, createMockFileManager, setupEventHandlers, setupFolderTracking, TEST_MANIFEST } from './testUtils';
 
 import VaultOrganizer from '../main';
 import { TFile, Notice } from 'obsidian';
-
-const createTFile = (path: string): TFile => new (TFile as unknown as { new(path: string): TFile })(path);
 
 describe('handleFileChange', () => {
   let metadataCache: { getFileCache: jest.Mock; on: jest.Mock };
@@ -118,7 +22,7 @@ describe('handleFileChange', () => {
   let fileEventHandlers: Record<string, (file: any, ...args: any[]) => Promise<void> | void>;
   let addCommandMock: jest.Mock;
   let registeredCommands: any[];
-  let metadataChangedHandler: ((file: any) => Promise<void> | void) | undefined;
+  let eventHandlers: ReturnType<typeof setupEventHandlers>;
   const addRuleViaSettings = async (rule: any) => {
     plugin.settings.rules.splice(0, plugin.settings.rules.length);
     plugin.settings.rules.push({ enabled: true, ...rule });
@@ -126,46 +30,28 @@ describe('handleFileChange', () => {
   };
 
   beforeEach(async () => {
-    metadataChangedHandler = undefined;
-    fileEventHandlers = {};
-    metadataCache = {
-      getFileCache: jest.fn(),
-      on: jest.fn((event: string, cb: (file: any) => Promise<void> | void) => {
-        if (event === 'changed') {
-          metadataChangedHandler = cb;
-        }
-        return {};
-      }),
-    };
+    // Setup mocks using shared utilities
+    metadataCache = createMockMetadataCache();
     renameFile = jest.fn().mockResolvedValue(undefined);
-    existingFolders = new Set<string>();
-    getAbstractFileByPath = jest.fn((path: string) => existingFolders.has(path) ? ({ path }) : null);
-    createFolder = jest.fn(async (path: string) => {
-      existingFolders.add(path);
-    });
-    vault = {
-      on: jest.fn((event: string, cb: any) => {
-        fileEventHandlers[event] = cb;
-        return {};
-      }),
-      getName: jest.fn().mockReturnValue('Vault'),
-      getAbstractFileByPath,
-      createFolder,
-      getMarkdownFiles: jest.fn().mockReturnValue([]),
-    };
-    const app = { metadataCache, fileManager: { renameFile }, vault } as any;
-    const manifest = {
-      id: 'obsidian-vault-organizer',
-      name: 'Vault Organizer',
-      version: '1.0.0',
-      minAppVersion: '1.0.0',
-      description: '',
-      author: '',
-      authorUrl: '',
-      dir: 'vault-organizer',
-      isDesktopOnly: false,
-    } as const;
-    plugin = new VaultOrganizer(app, manifest as any);
+    vault = createMockVault({ getName: jest.fn().mockReturnValue('Vault') });
+
+    // Setup event handlers and folder tracking
+    eventHandlers = setupEventHandlers(vault, metadataCache);
+    fileEventHandlers = eventHandlers.fileEventHandlers;
+    existingFolders = setupFolderTracking(vault);
+
+    // Assign vault methods to local variables for test access
+    createFolder = vault.createFolder;
+    getAbstractFileByPath = vault.getAbstractFileByPath;
+
+    // Setup app and plugin
+    const app = {
+      metadataCache,
+      fileManager: createMockFileManager({ renameFile }),
+      vault
+    } as any;
+
+    plugin = new VaultOrganizer(app, TEST_MANIFEST as any);
     plugin.addSettingTab = jest.fn();
     registeredCommands = [];
     addCommandMock = jest.fn((command) => { registeredCommands.push(command); return command; });
@@ -182,7 +68,7 @@ describe('handleFileChange', () => {
     expect((plugin as any).rules).toContainEqual(expect.objectContaining({ key: 'tag', value: 'journal', destination: 'Journal/' }));
     metadataCache.getFileCache.mockClear();
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
-    const file = createTFile('Temp/Test.md');
+    const file = createMockFile('Temp/Test.md');
     await handle(file);
     expect(renameFile).toHaveBeenCalledWith(file, 'Journal/Test.md');
     expect(metadataCache.getFileCache).toHaveBeenCalledTimes(1);
@@ -191,7 +77,7 @@ describe('handleFileChange', () => {
   it('skips rename when destination is blank', async () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: '   ' });
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
-    const file = createTFile('Temp/Test.md');
+    const file = createMockFile('Temp/Test.md');
     await handle(file);
     expect(renameFile).not.toHaveBeenCalled();
     expect(Notice).not.toHaveBeenCalled();
@@ -201,7 +87,7 @@ describe('handleFileChange', () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal', debug: true });
     expect((plugin as any).rules).toContainEqual(expect.objectContaining({ key: 'tag', value: 'journal', destination: 'Journal', debug: true }));
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
-    const file = createTFile('Temp/Test.md');
+    const file = createMockFile('Temp/Test.md');
     await handle(file);
     expect(renameFile).not.toHaveBeenCalled();
     expect(Notice).toHaveBeenCalledWith('DEBUG: Test would be moved to Vault/Journal');
@@ -211,10 +97,10 @@ describe('handleFileChange', () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
 
     metadataCache.getFileCache.mockReturnValueOnce({ frontmatter: { tag: 'note' } });
-    await handle(createTFile('Temp/Test.md'));
+    await handle(createMockFile('Temp/Test.md'));
 
     metadataCache.getFileCache.mockReturnValueOnce({ frontmatter: { tag: 'journal' } });
-    await handle(createTFile('Journal/Test.md'));
+    await handle(createMockFile('Journal/Test.md'));
 
     expect(renameFile).not.toHaveBeenCalled();
     expect(Notice).not.toHaveBeenCalled();
@@ -223,7 +109,7 @@ describe('handleFileChange', () => {
   it('creates missing destination folders before renaming', async () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal/2023' });
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
-    const file = createTFile('Temp/Test.md');
+    const file = createMockFile('Temp/Test.md');
 
     await handle(file);
 
@@ -238,7 +124,7 @@ describe('handleFileChange', () => {
   it('shows a failure notice when renaming fails', async () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
-    const file = createTFile('Temp/Test.md');
+    const file = createMockFile('Temp/Test.md');
     const renameError = new Error('rename failed');
     renameFile.mockRejectedValueOnce(renameError);
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -260,7 +146,7 @@ describe('handleFileChange', () => {
   it('shows a create-folder failure notice when folder creation fails', async () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
-    const file = createTFile('Temp/Test.md');
+    const file = createMockFile('Temp/Test.md');
     const folderError = new Error('permission denied');
     createFolder.mockImplementationOnce(async () => {
       throw folderError;
@@ -285,7 +171,7 @@ describe('handleFileChange', () => {
 
   it('applies rules to existing files via command', async () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
-    const file = createTFile('Temp/Test.md');
+    const file = createMockFile('Temp/Test.md');
     (plugin.app.vault.getMarkdownFiles as jest.Mock).mockReturnValue([file]);
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
 
@@ -298,7 +184,7 @@ describe('handleFileChange', () => {
 
   it('applies rules after metadata cache resolves frontmatter', async () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
-    const file = createTFile('Temp/Test.md');
+    const file = createMockFile('Temp/Test.md');
 
     metadataCache.getFileCache
       .mockReturnValueOnce(undefined)
@@ -307,16 +193,16 @@ describe('handleFileChange', () => {
     await handle(file);
 
     expect(renameFile).not.toHaveBeenCalled();
-    expect(metadataChangedHandler).toBeDefined();
+    expect(eventHandlers.metadataChangedHandler).toBeDefined();
 
-    await metadataChangedHandler?.(file);
+    await eventHandlers.metadataChangedHandler?.(file);
 
     expect(renameFile).toHaveBeenCalledWith(file, 'Journal/Test.md');
   });
 
   it('applies rules when files are renamed', async () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'Journal' });
-    const file = createTFile('Temp/Test.md');
+    const file = createMockFile('Temp/Test.md');
 
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
 
@@ -331,7 +217,7 @@ describe('handleFileChange', () => {
   it('omits invalid preview entries for reserved destinations', async () => {
     await addRuleViaSettings({ key: 'tag', value: 'journal', destination: 'CON' });
 
-    const file = createTFile('Temp/Test.md');
+    const file = createMockFile('Temp/Test.md');
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: 'journal' } });
     vault.getMarkdownFiles.mockReturnValue([file]);
 

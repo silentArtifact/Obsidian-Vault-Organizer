@@ -1,99 +1,5 @@
-jest.mock('obsidian', () => {
-    const noticeMock = jest.fn();
-    class TFile {
-        path: string;
-        name: string;
-        basename: string;
-        extension: string;
-        constructor(path?: string) {
-            this.path = path || '';
-            this.name = path ? path.split('/').pop()! : '';
-            const parts = this.name.split('.');
-            this.basename = parts.slice(0, -1).join('.') || this.name;
-            this.extension = parts.length > 1 ? parts.pop()! : '';
-        }
-    }
-    const debounce = <T extends (...args: any[]) => any>(fn: T, timeout = 0) => {
-        let timer: ReturnType<typeof setTimeout> | null = null;
-        let lastArgs: Parameters<T> | null = null;
-        const debounced: any = (...args: Parameters<T>) => {
-            lastArgs = args;
-            if (timer) {
-                clearTimeout(timer);
-            }
-            timer = setTimeout(() => {
-                timer = null;
-                lastArgs && fn(...lastArgs);
-            }, timeout);
-            return debounced;
-        };
-        debounced.cancel = () => {
-            if (timer) {
-                clearTimeout(timer);
-                timer = null;
-            }
-            return debounced;
-        };
-        debounced.run = () => {
-            if (timer) {
-                clearTimeout(timer);
-                const args = lastArgs;
-                timer = null;
-                if (args) {
-                    return fn(...args);
-                }
-            }
-        };
-        return debounced;
-    };
-
-    return {
-        App: class {},
-        Plugin: class {
-            app: any;
-            manifest: any;
-            constructor(app: any, manifest: any) {
-                this.app = app;
-                this.manifest = manifest;
-            }
-            loadData() { return Promise.resolve(undefined); }
-            saveData() { return Promise.resolve(); }
-            addSettingTab() {}
-            registerEvent() {}
-            addCommand() {}
-        },
-        TFile,
-        normalizePath: (p: string) => p.replace(/\\/g, '/'),
-        Notice: noticeMock,
-        Modal: class {
-            app: any;
-            contentEl: any = {
-                empty: jest.fn(),
-                createEl: jest.fn(),
-                createDiv: jest.fn(),
-            };
-            open() {}
-            close() {}
-            onOpen() {}
-            onClose() {}
-        },
-        PluginSettingTab: class { constructor(app: any, plugin: any) {} },
-        Setting: class {
-            setName() { return this; }
-            setDesc() { return this; }
-            addText() { return this; }
-            addToggle() { return this; }
-            addButton() { return this; }
-        },
-        FuzzySuggestModal: class {
-            constructor(_app: any) {}
-            open() {}
-        },
-        TAbstractFile: class {},
-        debounce,
-        getAllTags: jest.fn(() => []),
-    };
-}, { virtual: true });
+import './setupObsidian';
+import { createMockFile, createMockVault, createMockMetadataCache, createMockFileManager, TEST_MANIFEST } from './testUtils';
 
 import { TFile, Notice } from 'obsidian';
 import VaultOrganizer from '../main';
@@ -109,23 +15,10 @@ describe('Undo Functionality', () => {
         // Clear all mocks
         jest.clearAllMocks();
 
-        // Setup mocks
-        mockVault = {
-            getAbstractFileByPath: jest.fn(),
-            getMarkdownFiles: jest.fn(() => []),
-            createFolder: jest.fn(),
-            on: jest.fn(),
-            getName: jest.fn(() => 'TestVault'),
-        };
-
-        mockFileManager = {
-            renameFile: jest.fn(),
-        };
-
-        mockMetadataCache = {
-            getFileCache: jest.fn(),
-            on: jest.fn(),
-        };
+        // Setup mocks using shared utilities
+        mockVault = createMockVault();
+        mockFileManager = createMockFileManager();
+        mockMetadataCache = createMockMetadataCache();
 
         mockApp = {
             vault: mockVault,
@@ -133,14 +26,7 @@ describe('Undo Functionality', () => {
             metadataCache: mockMetadataCache,
         };
 
-        plugin = new VaultOrganizer(mockApp, {
-            id: 'test-plugin',
-            name: 'Test Plugin',
-            author: 'Test',
-            version: '1.0.0',
-            minAppVersion: '0.15.0',
-            dir: '',
-        } as any);
+        plugin = new VaultOrganizer(mockApp, TEST_MANIFEST as any);
 
         await plugin.loadSettings();
         plugin.settings.moveHistory = [];
@@ -201,7 +87,7 @@ describe('Undo Functionality', () => {
         });
 
         it('should undo the last move successfully', async () => {
-            const mockFile = new TFile('folder2/test.md');
+            const mockFile = createMockFile('folder2/test.md');
 
             plugin.settings.moveHistory = [{
                 timestamp: Date.now(),
@@ -244,8 +130,8 @@ describe('Undo Functionality', () => {
         });
 
         it('should handle file already exists at destination', async () => {
-            const mockCurrentFile = new TFile('folder2/test.md');
-            const mockExistingFile = new TFile('folder1/test.md');
+            const mockCurrentFile = createMockFile('folder2/test.md');
+            const mockExistingFile = createMockFile('folder1/test.md');
 
             plugin.settings.moveHistory = [{
                 timestamp: Date.now(),
@@ -271,7 +157,7 @@ describe('Undo Functionality', () => {
         });
 
         it('should create necessary folders when undoing', async () => {
-            const mockFile = new TFile('dest/test.md');
+            const mockFile = createMockFile('dest/test.md');
 
             plugin.settings.moveHistory = [{
                 timestamp: Date.now(),
@@ -301,7 +187,7 @@ describe('Undo Functionality', () => {
         });
 
         it('should handle rename errors gracefully', async () => {
-            const mockFile = new TFile('folder2/test.md');
+            const mockFile = createMockFile('folder2/test.md');
 
             plugin.settings.moveHistory = [{
                 timestamp: Date.now(),
@@ -331,7 +217,7 @@ describe('Undo Functionality', () => {
 
     describe('Move History Integration', () => {
         it('should record moves when applyRulesToFile succeeds', async () => {
-            const mockFile = new TFile('inbox/test.md');
+            const mockFile = createMockFile('inbox/test.md');
 
             mockMetadataCache.getFileCache.mockReturnValue({
                 frontmatter: { status: 'done' },
@@ -362,7 +248,7 @@ describe('Undo Functionality', () => {
         });
 
         it('should not record moves when in debug mode', async () => {
-            const mockFile = new TFile('inbox/test.md');
+            const mockFile = createMockFile('inbox/test.md');
 
             mockMetadataCache.getFileCache.mockReturnValue({
                 frontmatter: { status: 'done' },
