@@ -266,7 +266,8 @@ describe('Undo Functionality', () => {
             expect(Notice).toHaveBeenCalledWith(
                 expect.stringContaining('A file already exists')
             );
-            expect(plugin.settings.moveHistory).toHaveLength(1); // Not removed
+            // Consistent with missing file case - remove from history
+            expect(plugin.settings.moveHistory).toHaveLength(0);
         });
 
         it('should create necessary folders when undoing', async () => {

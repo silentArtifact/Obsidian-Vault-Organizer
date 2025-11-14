@@ -106,9 +106,8 @@ export default class VaultOrganizer extends Plugin {
     }
 
     async saveSettings() {
-        const normalizedRules = this.settings.rules.map(normalizeSerializedRule);
-        this.settings.rules = normalizedRules;
-        await this.saveData({ ...this.settings, rules: normalizedRules });
+        this.settings.rules = this.settings.rules.map(normalizeSerializedRule);
+        await this.saveData(this.settings);
     }
 
     updateRulesFromSettings() {
@@ -150,7 +149,11 @@ export default class VaultOrganizer extends Plugin {
         return this.ruleParseErrors.find(error => error.index === index);
     }
 
-    private async recordMove(fromPath: string, toPath: string, fileName: string, ruleKey: string): Promise<void> {
+    private async recordMove(fromPath: string, toPath: string, fileName: string, ruleKey: string, skipSave = false): Promise<void> {
+        if (!fromPath || !toPath || !fileName) {
+            throw new Error('Invalid move parameters: fromPath, toPath, and fileName are required');
+        }
+
         const entry: MoveHistoryEntry = {
             timestamp: Date.now(),
             fileName,
@@ -166,7 +169,9 @@ export default class VaultOrganizer extends Plugin {
             this.settings.moveHistory = this.settings.moveHistory.slice(0, this.settings.maxHistorySize);
         }
 
-        await this.saveSettings();
+        if (!skipSave) {
+            await this.saveSettings();
+        }
     }
 
     async undoLastMove(): Promise<void> {
@@ -197,6 +202,9 @@ export default class VaultOrganizer extends Plugin {
         const destinationExists = this.app.vault.getAbstractFileByPath(lastMove.fromPath);
         if (destinationExists) {
             new Notice(`Cannot undo: A file already exists at ${lastMove.fromPath}`);
+            // Remove from history to be consistent with missing file case
+            this.settings.moveHistory.shift();
+            await this.saveSettings();
             return;
         }
 
@@ -247,7 +255,17 @@ export default class VaultOrganizer extends Plugin {
         let currentPath = '';
         for (const segment of segments) {
             currentPath = currentPath ? `${currentPath}/${segment}` : segment;
-            if (this.app.vault.getAbstractFileByPath(currentPath)) {
+            const existing = this.app.vault.getAbstractFileByPath(currentPath);
+
+            if (existing) {
+                // Check if it's a file - we can't create a folder with the same name as a file
+                if (existing instanceof TFile) {
+                    throw new VaultOrganizerError(
+                        `Cannot create folder "${currentPath}": a file with this name already exists`,
+                        `A file named "${currentPath}" already exists. Please rename or move the file before creating a folder with this name.`
+                    );
+                }
+                // It's a folder, already exists - continue
                 continue;
             }
 
@@ -261,7 +279,7 @@ export default class VaultOrganizer extends Plugin {
         }
     }
 
-    private async applyRulesToFile(file: TFile): Promise<void> {
+    private async applyRulesToFile(file: TFile, skipSave = false): Promise<void> {
         let intendedDestination: string | undefined;
         try {
             const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
@@ -320,7 +338,7 @@ export default class VaultOrganizer extends Plugin {
             try {
                 await this.app.fileManager.renameFile(file, newPath);
                 // Record successful move in history
-                await this.recordMove(oldPath, newPath, file.name, rule.key);
+                await this.recordMove(oldPath, newPath, file.name, rule.key, skipSave);
             } catch (err) {
                 // Categorize the rename error for better user feedback
                 const categorized = categorizeError(err, file.path, 'move', newPath);
@@ -346,9 +364,13 @@ export default class VaultOrganizer extends Plugin {
             return;
         }
 
+        // Use batch mode to avoid saving settings on every move
         for (const file of markdownFiles) {
-            await this.applyRulesToFile(file);
+            await this.applyRulesToFile(file, true);
         }
+
+        // Save settings once at the end
+        await this.saveSettings();
     }
 
     testAllRules(): RuleTestResult[] {
