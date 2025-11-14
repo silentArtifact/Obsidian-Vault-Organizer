@@ -540,5 +540,68 @@ describe('settings UI', () => {
     expect(warning.classList.contains('vault-organizer-rule-warning')).toBe(true);
     expect(warning.classList.contains('vault-organizer-rule-error')).toBe(false);
   });
+
+  it('handles caseInsensitive toggle changes and triggers reorganization', async () => {
+    await fireEvent.click(screen.getByText('Add Rule'));
+    await flushPromises();
+
+    const keyInput = await screen.findByPlaceholderText('key') as HTMLInputElement;
+    await fireEvent.input(keyInput, { target: { value: 'status' } });
+    await jest.runOnlyPendingTimersAsync();
+
+    const valueInput = await screen.findByPlaceholderText('value') as HTMLInputElement;
+    await fireEvent.input(valueInput, { target: { value: 'Active' } });
+    await jest.runOnlyPendingTimersAsync();
+
+    const destInput = await screen.findByPlaceholderText('destination folder (required)') as HTMLInputElement;
+    await fireEvent.input(destInput, { target: { value: 'Projects' } });
+    await jest.runOnlyPendingTimersAsync();
+    await flushPromises();
+
+    expect(plugin.settings.rules[0]).toEqual({
+      key: 'status',
+      value: 'Active',
+      destination: 'Projects',
+      matchType: 'equals',
+      debug: false,
+      enabled: false
+    });
+
+    const caseInsensitiveToggle = (await screen.findByTitle('Case insensitive matching')) as HTMLInputElement;
+    expect(caseInsensitiveToggle.checked).toBe(false);
+
+    const saveCallsBefore = (plugin.saveData as jest.Mock).mock.calls.length;
+    await fireEvent.click(caseInsensitiveToggle);
+    await flushPromises();
+
+    expect((plugin.saveData as jest.Mock).mock.calls.length).toBeGreaterThan(saveCallsBefore);
+    expect(plugin.settings.rules[0].caseInsensitive).toBe(true);
+    expect(reorganizeSpy).toHaveBeenCalled();
+  });
+
+  it('displays error warning when rule has invalid regex after refreshWarnings is called', async () => {
+    // Add a rule with invalid regex
+    await fireEvent.click(screen.getByText('Add Rule'));
+    await flushPromises();
+
+    const matchTypeSelect = screen.getByLabelText('Match type') as HTMLSelectElement;
+    await fireEvent.change(matchTypeSelect, { target: { value: 'regex' } });
+    await flushPromises();
+
+    const valueInput = await screen.findByPlaceholderText('value') as HTMLInputElement;
+    await fireEvent.input(valueInput, { target: { value: '/\\' } });
+    await jest.runOnlyPendingTimersAsync();
+    await flushPromises();
+
+    // Find the warning element that was created
+    const warningElements = document.querySelectorAll('.vault-organizer-rule-error');
+    expect(warningElements.length).toBeGreaterThan(0);
+
+    const errorElement = Array.from(warningElements).find(el =>
+      el.textContent?.includes('Invalid regular expression')
+    );
+    expect(errorElement).toBeDefined();
+    expect(errorElement?.classList.contains('vault-organizer-rule-error')).toBe(true);
+  });
 });
 
