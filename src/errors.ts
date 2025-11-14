@@ -5,8 +5,14 @@
 
 /**
  * Base class for all Vault Organizer errors.
+ * Provides consistent error handling with user-friendly messages and proper stack traces.
  */
 export abstract class VaultOrganizerError extends Error {
+	/**
+	 * Creates a new VaultOrganizerError.
+	 *
+	 * @param message - The technical error message for logging and debugging
+	 */
 	constructor(message: string) {
 		super(message);
 		this.name = this.constructor.name;
@@ -24,8 +30,16 @@ export abstract class VaultOrganizerError extends Error {
 
 /**
  * Error thrown when a file operation fails due to insufficient permissions.
+ * Indicates the user or process lacks the necessary permissions to access or modify the file.
  */
 export class PermissionError extends VaultOrganizerError {
+        /**
+         * Creates a new PermissionError.
+         *
+         * @param filePath - The path to the file that caused the permission error
+         * @param operation - The operation that was attempted (e.g., 'move', 'read', 'write')
+         * @param originalError - The original error that triggered this permission error, if any
+         */
         constructor(
                 public readonly filePath: string,
                 public readonly operation: string,
@@ -35,6 +49,12 @@ export class PermissionError extends VaultOrganizerError {
                 super(`Permission denied: Cannot ${friendlyOperation} "${filePath}"`);
         }
 
+        /**
+         * Returns a user-friendly error message suitable for display in Obsidian notices.
+         * Includes the file path, operation, and actionable advice.
+         *
+         * @returns A formatted error message string
+         */
         getUserMessage(): string {
                 const friendlyOperation = formatOperationForMessage(this.operation);
                 return `Permission denied: Cannot ${friendlyOperation} "${this.filePath}". Check file permissions and try again.`;
@@ -42,9 +62,19 @@ export class PermissionError extends VaultOrganizerError {
 }
 
 /**
- * Error thrown when a file operation fails due to a conflict (e.g., destination file already exists).
+ * Error thrown when a file operation fails due to a conflict.
+ * Covers cases like existing files, locked files, or files currently in use.
  */
 export class FileConflictError extends VaultOrganizerError {
+        /**
+         * Creates a new FileConflictError.
+         *
+         * @param sourcePath - The path to the source file being operated on
+         * @param destinationPath - The destination path if applicable (e.g., for move operations)
+         * @param conflictType - The type of conflict: 'exists' (file already exists), 'locked' (file is locked), or 'in-use' (file is being used)
+         * @param operation - The operation that was attempted (e.g., 'move', 'copy', 'create')
+         * @param originalError - The original error that triggered this conflict error, if any
+         */
         constructor(
                 public readonly sourcePath: string,
                 public readonly destinationPath: string | undefined,
@@ -59,6 +89,12 @@ export class FileConflictError extends VaultOrganizerError {
                 super(`File conflict: ${baseMessage} - file ${conflictType}`);
         }
 
+        /**
+         * Returns a user-friendly error message suitable for display in Obsidian notices.
+         * Provides specific details about the conflict type and involved files.
+         *
+         * @returns A formatted error message string
+         */
         getUserMessage(): string {
                 const reasons = {
                         exists: 'a file already exists at that location',
@@ -75,8 +111,17 @@ export class FileConflictError extends VaultOrganizerError {
 
 /**
  * Error thrown when a path is invalid or doesn't meet OS compatibility requirements.
+ * Validates paths for security (no traversal), OS constraints (character limits, reserved names),
+ * and general validity (non-empty, relative paths only).
  */
 export class InvalidPathError extends VaultOrganizerError {
+	/**
+	 * Creates a new InvalidPathError.
+	 *
+	 * @param path - The invalid path that was provided
+	 * @param reason - The reason why the path is invalid
+	 * @param details - Optional additional details about the validation failure
+	 */
 	constructor(
 		public readonly path: string,
 		public readonly reason:
@@ -91,6 +136,12 @@ export class InvalidPathError extends VaultOrganizerError {
 		super(`Invalid path "${path}": ${reason}${details ? ` - ${details}` : ''}`);
 	}
 
+	/**
+	 * Returns a user-friendly error message suitable for display in Obsidian notices.
+	 * Explains why the path is invalid and provides the specific reason.
+	 *
+	 * @returns A formatted error message string
+	 */
 	getUserMessage(): string {
 		const reasons = {
 			empty: 'Path cannot be empty',
@@ -108,9 +159,18 @@ export class InvalidPathError extends VaultOrganizerError {
 }
 
 /**
- * Error thrown when a file operation fails but doesn't fit into specific categories.
+ * Error thrown when a file operation fails but doesn't fit into specific categories
+ * like permissions, conflicts, or path validation issues. Used as a generic fallback
+ * for unexpected file system errors.
  */
 export class FileOperationError extends VaultOrganizerError {
+        /**
+         * Creates a new FileOperationError.
+         *
+         * @param filePath - The path to the file that was being operated on
+         * @param operation - The operation that failed (e.g., 'move', 'read', 'delete')
+         * @param originalError - The original error that caused the operation to fail, if any
+         */
         constructor(
                 public readonly filePath: string,
                 public readonly operation: string,
@@ -120,6 +180,12 @@ export class FileOperationError extends VaultOrganizerError {
                 super(`File operation failed: ${friendlyOperation} on "${filePath}"`);
         }
 
+        /**
+         * Returns a user-friendly error message suitable for display in Obsidian notices.
+         * Includes the file path, operation, and original error details if available.
+         *
+         * @returns A formatted error message string
+         */
         getUserMessage(): string {
                 const friendlyOperation = formatOperationForMessage(this.operation);
                 const errorDetails = this.originalError?.message
@@ -216,6 +282,13 @@ export function categorizeError(
         return new FileOperationError(filePath, operation, err);
 }
 
+/**
+ * Converts operation names from kebab-case to space-separated words for user-friendly messages.
+ * For example, 'move-file' becomes 'move file'.
+ *
+ * @param operation - The operation name to format (e.g., 'move-file', 'read-content')
+ * @returns The formatted operation string with spaces instead of hyphens
+ */
 function formatOperationForMessage(operation: string): string {
         return operation.replace(/-/g, ' ');
 }

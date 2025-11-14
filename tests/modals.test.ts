@@ -130,6 +130,7 @@ jest.mock('obsidian', () => {
   };
 }, { virtual: true });
 
+import { TEST_MANIFEST } from './testUtils';
 import { MoveHistoryModal, TestAllRulesModal, RuleTagPickerModal, RuleFrontmatterKeyPickerModal } from '../src/ui/modals';
 import VaultOrganizer from '../main';
 import type { MoveHistoryEntry, RuleTestResult } from '../src/types';
@@ -147,12 +148,7 @@ describe('MoveHistoryModal', () => {
       fileManager: {},
       vault: { on: jest.fn(), getName: jest.fn(() => 'TestVault') },
     };
-    const manifest = {
-      id: 'vault-organizer',
-      name: 'Vault Organizer',
-      version: '1.0.0',
-    } as any;
-    plugin = new VaultOrganizer(app, manifest);
+    plugin = new VaultOrganizer(app, TEST_MANIFEST as any);
     plugin.saveSettings = jest.fn().mockResolvedValue(undefined);
   });
 

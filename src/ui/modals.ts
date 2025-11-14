@@ -3,43 +3,115 @@ import type VaultOrganizer from '../../main';
 import type { RuleTestResult } from '../types';
 import type { SerializedFrontmatterRule } from '../rules';
 
+/**
+ * Modal that allows users to search and select from a list of tags.
+ * Extends Obsidian's FuzzySuggestModal to provide fuzzy search functionality.
+ */
 export class RuleTagPickerModal extends FuzzySuggestModal<string> {
+    /**
+     * Creates a new tag picker modal.
+     *
+     * @param app - The Obsidian app instance
+     * @param tags - Array of tag strings to display in the picker
+     * @param onSelect - Callback function invoked when a tag is selected
+     */
     constructor(app: App, private readonly tags: string[], private readonly onSelect: (tag: string) => void) {
         super(app);
     }
 
+    /**
+     * Returns the list of items to display in the fuzzy search modal.
+     * Overrides FuzzySuggestModal.getItems().
+     *
+     * @returns Array of tag strings
+     */
     getItems(): string[] {
         return this.tags;
     }
 
+    /**
+     * Returns the display text for a given tag item.
+     * Overrides FuzzySuggestModal.getItemText().
+     *
+     * @param tag - The tag string to display
+     * @returns The tag string as-is
+     */
     getItemText(tag: string): string {
         return tag;
     }
 
+    /**
+     * Called when a tag is selected from the list.
+     * Overrides FuzzySuggestModal.onChooseItem().
+     *
+     * @param tag - The selected tag string
+     */
     onChooseItem(tag: string): void {
         this.onSelect(tag);
     }
 }
 
+/**
+ * Modal that allows users to search and select from a list of frontmatter keys.
+ * Extends Obsidian's FuzzySuggestModal to provide fuzzy search functionality.
+ */
 export class RuleFrontmatterKeyPickerModal extends FuzzySuggestModal<string> {
+    /**
+     * Creates a new frontmatter key picker modal.
+     *
+     * @param app - The Obsidian app instance
+     * @param keys - Array of frontmatter key strings to display in the picker
+     * @param onSelect - Callback function invoked when a key is selected
+     */
     constructor(app: App, private readonly keys: string[], private readonly onSelect: (key: string) => void) {
         super(app);
     }
 
+    /**
+     * Returns the list of items to display in the fuzzy search modal.
+     * Overrides FuzzySuggestModal.getItems().
+     *
+     * @returns Array of frontmatter key strings
+     */
     getItems(): string[] {
         return this.keys;
     }
 
+    /**
+     * Returns the display text for a given frontmatter key item.
+     * Overrides FuzzySuggestModal.getItemText().
+     *
+     * @param key - The frontmatter key string to display
+     * @returns The key string as-is
+     */
     getItemText(key: string): string {
         return key;
     }
 
+    /**
+     * Called when a frontmatter key is selected from the list.
+     * Overrides FuzzySuggestModal.onChooseItem().
+     *
+     * @param key - The selected frontmatter key string
+     */
     onChooseItem(key: string): void {
         this.onSelect(key);
     }
 }
 
+/**
+ * Modal that displays the results of testing all rules against vault files.
+ * Shows a preview of which files would be moved and where they would be moved to,
+ * including warnings and errors for invalid moves.
+ */
 export class TestAllRulesModal extends Modal {
+    /**
+     * Creates a new test all rules modal.
+     *
+     * @param app - The Obsidian app instance
+     * @param results - Array of rule test results containing file matches and potential moves
+     * @param rules - Array of serialized frontmatter rules being tested
+     */
     constructor(
         app: App,
         private readonly results: RuleTestResult[],
@@ -48,6 +120,13 @@ export class TestAllRulesModal extends Modal {
         super(app);
     }
 
+    /**
+     * Called when the modal is opened. Renders the test results UI showing:
+     * - Files that would be moved with source and destination paths
+     * - Files skipped due to errors or invalid destinations
+     * - Associated rule information and warnings
+     * Overrides Modal.onOpen().
+     */
     onOpen() {
         const { contentEl } = this;
         contentEl.empty();
@@ -154,17 +233,40 @@ export class TestAllRulesModal extends Modal {
         closeButton.onclick = () => this.close();
     }
 
+    /**
+     * Called when the modal is closed. Cleans up the modal's content.
+     * Overrides Modal.onClose().
+     */
     onClose() {
         const { contentEl } = this;
         contentEl.empty();
     }
 }
 
+/**
+ * Modal that displays the history of file moves performed by the plugin.
+ * Shows timestamps, file names, source and destination paths, and provides
+ * an undo option for the most recent move.
+ */
 export class MoveHistoryModal extends Modal {
+    /**
+     * Creates a new move history modal.
+     *
+     * @param app - The Obsidian app instance
+     * @param plugin - The VaultOrganizer plugin instance containing move history
+     */
     constructor(app: App, private readonly plugin: VaultOrganizer) {
         super(app);
     }
 
+    /**
+     * Called when the modal is opened. Renders the move history UI showing:
+     * - List of all moves in chronological order (most recent first)
+     * - Timestamps, file names, source/destination paths, and rule information
+     * - Undo button for the most recent move
+     * - Clear history button to remove all history entries
+     * Overrides Modal.onOpen().
+     */
     onOpen() {
         const { contentEl } = this;
         contentEl.empty();
@@ -263,6 +365,10 @@ export class MoveHistoryModal extends Modal {
         closeButton.onclick = () => this.close();
     }
 
+    /**
+     * Called when the modal is closed. Cleans up the modal's content.
+     * Overrides Modal.onClose().
+     */
     onClose() {
         const { contentEl } = this;
         contentEl.empty();

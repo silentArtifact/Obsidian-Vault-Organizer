@@ -3,154 +3,46 @@
  * These tests ensure the plugin handles unusual file system situations gracefully.
  */
 
-jest.mock('obsidian', () => {
-  const noticeMock = jest.fn();
-  class TFile {
-    path: string;
-    name: string;
-    basename: string;
-    extension: string;
-    constructor(path: string) {
-      this.path = path;
-      this.name = path.split('/').pop()!;
-      const parts = this.name.split('.');
-      this.basename = parts.slice(0, -1).join('.') || this.name;
-      this.extension = parts.length > 1 ? parts.pop()! : '';
-    }
-  }
-  const debounce = <T extends (...args: any[]) => any>(fn: T, timeout = 0) => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let lastArgs: Parameters<T> | null = null;
-    const debounced: any = (...args: Parameters<T>) => {
-      lastArgs = args;
-      if (timer) {
-        clearTimeout(timer);
-      }
-      timer = setTimeout(() => {
-        timer = null;
-        lastArgs && fn(...lastArgs);
-      }, timeout);
-      return debounced;
-    };
-    debounced.cancel = () => {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      return debounced;
-    };
-    debounced.run = () => {
-      if (timer) {
-        clearTimeout(timer);
-        const args = lastArgs;
-        timer = null;
-        if (args) {
-          return fn(...args);
-        }
-      }
-    };
-    return debounced;
-  };
-
-  return {
-    App: class {},
-    Plugin: class {
-      app: any;
-      manifest: any;
-      constructor(app: any, manifest: any) {
-        this.app = app;
-        this.manifest = manifest;
-      }
-      loadData() { return Promise.resolve(undefined); }
-      saveData() { return Promise.resolve(); }
-      addSettingTab() {}
-      registerEvent() {}
-      addCommand() {}
-    },
-    TFile,
-    normalizePath: (p: string) => require('path').posix.normalize(p.replace(/\\/g, '/')),
-    Notice: noticeMock,
-    Modal: class {
-      app: any;
-      contentEl: any = {
-        empty: jest.fn(),
-        createEl: jest.fn(),
-        createDiv: jest.fn(),
-      };
-      open() {}
-      close() {}
-      onOpen() {}
-      onClose() {}
-    },
-    PluginSettingTab: class { constructor(app: any, plugin: any) {} },
-    Setting: class {
-      setName() { return this; }
-      setDesc() { return this; }
-      addText() { return this; }
-      addToggle() { return this; }
-      addButton() { return this; }
-    },
-    FuzzySuggestModal: class {
-      constructor(_app: any) {}
-      open() {}
-    },
-    TAbstractFile: class {},
-    debounce,
-    getAllTags: jest.fn(() => []),
-  };
-}, { virtual: true });
+import './setupObsidian';
+import { createMockFile, createMockVault, createMockMetadataCache, createMockFileManager, setupEventHandlers, setupFolderTracking, TEST_MANIFEST } from './testUtils';
 
 import VaultOrganizer from '../main';
 import { TFile, Notice } from 'obsidian';
 import { validatePath, validateDestinationPath } from '../src/pathSanitization';
 
-const createTFile = (path: string): TFile => new (TFile as unknown as { new(path: string): TFile })(path);
-
 describe('Edge Cases - Unicode Characters', () => {
   let metadataCache: { getFileCache: jest.Mock; on: jest.Mock };
   let renameFile: jest.Mock;
-  let createFolder: jest.Mock;
-  let getAbstractFileByPath: jest.Mock;
   let existingFolders: Set<string>;
   let plugin: VaultOrganizer;
   let handleModify: (file: any) => Promise<void>;
+  let vault: ReturnType<typeof createMockVault>;
 
   beforeEach(async () => {
-    metadataCache = {
-      getFileCache: jest.fn(),
-      on: jest.fn(() => ({})),
-    };
+    // Setup mocks using shared utilities
+    metadataCache = createMockMetadataCache();
     renameFile = jest.fn().mockResolvedValue(undefined);
-    existingFolders = new Set<string>();
-    getAbstractFileByPath = jest.fn((path: string) => existingFolders.has(path) ? ({ path }) : null);
-    createFolder = jest.fn(async (path: string) => {
-      existingFolders.add(path);
+    vault = createMockVault();
+
+    // Setup folder tracking
+    existingFolders = setupFolderTracking(vault);
+
+    // Setup event handlers
+    vault.on.mockImplementation((event: string, cb: any) => {
+      if (event === 'modify') {
+        handleModify = cb;
+      }
+      return {};
     });
-    const vault = {
-      on: jest.fn((event: string, cb: any) => {
-        if (event === 'modify') {
-          handleModify = cb;
-        }
-        return {};
-      }),
-      getName: jest.fn().mockReturnValue('TestVault'),
-      getAbstractFileByPath,
-      createFolder,
-      getMarkdownFiles: jest.fn().mockReturnValue([]),
-    };
-    const app = { metadataCache, fileManager: { renameFile }, vault } as any;
-    const manifest = {
-      id: 'obsidian-vault-organizer',
-      name: 'Vault Organizer',
-      version: '1.0.0',
-      minAppVersion: '1.0.0',
-      description: '',
-      author: '',
-      authorUrl: '',
-      dir: 'vault-organizer',
-      isDesktopOnly: false,
-    } as const;
-    plugin = new VaultOrganizer(app, manifest as any);
+
+    // Setup app and plugin
+    const app = {
+      metadataCache,
+      fileManager: createMockFileManager({ renameFile }),
+      vault
+    } as any;
+
+    plugin = new VaultOrganizer(app, TEST_MANIFEST as any);
     plugin.addSettingTab = jest.fn();
     (plugin as any).addCommand = jest.fn();
     await plugin.onload();
@@ -162,7 +54,7 @@ describe('Edge Cases - Unicode Characters', () => {
       plugin.settings.rules.push({ key: 'type', value: 'note', destination: 'Notes', enabled: true });
       await plugin.saveSettingsWithoutReorganizing();
 
-      const emojiFile = createTFile('📝 My Note.md');
+      const emojiFile = createMockFile('📝 My Note.md');
       metadataCache.getFileCache.mockReturnValue({ frontmatter: { type: 'note' } });
 
       await handleModify(emojiFile);
@@ -173,7 +65,7 @@ describe('Edge Cases - Unicode Characters', () => {
       plugin.settings.rules.push({ key: 'lang', value: 'zh', destination: '中文笔记', enabled: true });
       await plugin.saveSettingsWithoutReorganizing();
 
-      const chineseFile = createTFile('我的笔记.md');
+      const chineseFile = createMockFile('我的笔记.md');
       metadataCache.getFileCache.mockReturnValue({ frontmatter: { lang: 'zh' } });
 
       await handleModify(chineseFile);
@@ -184,7 +76,7 @@ describe('Edge Cases - Unicode Characters', () => {
       plugin.settings.rules.push({ key: 'type', value: 'note', destination: '日本語', enabled: true });
       await plugin.saveSettingsWithoutReorganizing();
 
-      const japaneseFile = createTFile('私のノート.md');
+      const japaneseFile = createMockFile('私のノート.md');
       metadataCache.getFileCache.mockReturnValue({ frontmatter: { type: 'note' } });
 
       await handleModify(japaneseFile);
@@ -195,7 +87,7 @@ describe('Edge Cases - Unicode Characters', () => {
       plugin.settings.rules.push({ key: 'lang', value: 'ar', destination: 'العربية', enabled: true });
       await plugin.saveSettingsWithoutReorganizing();
 
-      const arabicFile = createTFile('ملاحظاتي.md');
+      const arabicFile = createMockFile('ملاحظاتي.md');
       metadataCache.getFileCache.mockReturnValue({ frontmatter: { lang: 'ar' } });
 
       await handleModify(arabicFile);
@@ -206,7 +98,7 @@ describe('Edge Cases - Unicode Characters', () => {
       plugin.settings.rules.push({ key: 'lang', value: 'ru', destination: 'Русский', enabled: true });
       await plugin.saveSettingsWithoutReorganizing();
 
-      const cyrillicFile = createTFile('Мои заметки.md');
+      const cyrillicFile = createMockFile('Мои заметки.md');
       metadataCache.getFileCache.mockReturnValue({ frontmatter: { lang: 'ru' } });
 
       await handleModify(cyrillicFile);
@@ -217,7 +109,7 @@ describe('Edge Cases - Unicode Characters', () => {
       plugin.settings.rules.push({ key: 'lang', value: 'ko', destination: '한국어', enabled: true });
       await plugin.saveSettingsWithoutReorganizing();
 
-      const koreanFile = createTFile('내 노트.md');
+      const koreanFile = createMockFile('내 노트.md');
       metadataCache.getFileCache.mockReturnValue({ frontmatter: { lang: 'ko' } });
 
       await handleModify(koreanFile);
@@ -228,7 +120,7 @@ describe('Edge Cases - Unicode Characters', () => {
       plugin.settings.rules.push({ key: 'type', value: 'mixed', destination: 'Mixed/多言語/🌍', enabled: true });
       await plugin.saveSettingsWithoutReorganizing();
 
-      const mixedFile = createTFile('English-中文-日本語-🎌.md');
+      const mixedFile = createMockFile('English-中文-日本語-🎌.md');
       metadataCache.getFileCache.mockReturnValue({ frontmatter: { type: 'mixed' } });
 
       await handleModify(mixedFile);
@@ -240,7 +132,7 @@ describe('Edge Cases - Unicode Characters', () => {
       await plugin.saveSettingsWithoutReorganizing();
 
       // File name with combining diacritical marks
-      const combiningFile = createTFile('Café.md'); // é is e + combining acute accent
+      const combiningFile = createMockFile('Café.md'); // é is e + combining acute accent
       metadataCache.getFileCache.mockReturnValue({ frontmatter: { type: 'special' } });
 
       await handleModify(combiningFile);
@@ -253,7 +145,7 @@ describe('Edge Cases - Unicode Characters', () => {
       plugin.settings.rules.push({ key: 'tag', value: '重要', destination: 'Important', enabled: true });
       await plugin.saveSettingsWithoutReorganizing();
 
-      const file = createTFile('Note.md');
+      const file = createMockFile('Note.md');
       metadataCache.getFileCache.mockReturnValue({ frontmatter: { tag: '重要' } });
 
       await handleModify(file);
@@ -264,7 +156,7 @@ describe('Edge Cases - Unicode Characters', () => {
       plugin.settings.rules.push({ key: 'status', value: '✅', destination: 'Completed', enabled: true });
       await plugin.saveSettingsWithoutReorganizing();
 
-      const file = createTFile('Task.md');
+      const file = createMockFile('Task.md');
       metadataCache.getFileCache.mockReturnValue({ frontmatter: { status: '✅' } });
 
       await handleModify(file);
@@ -283,7 +175,7 @@ describe('Edge Cases - Unicode Characters', () => {
       });
       await plugin.saveSettingsWithoutReorganizing();
 
-      const file = createTFile('Note.md');
+      const file = createMockFile('Note.md');
       metadataCache.getFileCache.mockReturnValue({ frontmatter: { title: '笔记' } });
 
       await handleModify(file);
@@ -296,7 +188,7 @@ describe('Edge Cases - Unicode Characters', () => {
       plugin.settings.rules.push({ key: 'name', value: 'café', destination: 'Cafe', enabled: true });
       await plugin.saveSettingsWithoutReorganizing();
 
-      const file = createTFile('Test.md');
+      const file = createMockFile('Test.md');
       // NFD form: c + a + f + e + combining acute accent
       metadataCache.getFileCache.mockReturnValue({ frontmatter: { name: 'café' } });
 
@@ -485,48 +377,36 @@ describe('Edge Cases - Path Sanitization and Validation', () => {
 describe('Edge Cases - Symlinks (Conceptual Tests)', () => {
   let metadataCache: { getFileCache: jest.Mock; on: jest.Mock };
   let renameFile: jest.Mock;
-  let createFolder: jest.Mock;
-  let getAbstractFileByPath: jest.Mock;
   let existingFolders: Set<string>;
   let plugin: VaultOrganizer;
   let handleModify: (file: any) => Promise<void>;
+  let vault: ReturnType<typeof createMockVault>;
 
   beforeEach(async () => {
-    metadataCache = {
-      getFileCache: jest.fn(),
-      on: jest.fn(() => ({})),
-    };
+    // Setup mocks using shared utilities
+    metadataCache = createMockMetadataCache();
     renameFile = jest.fn().mockResolvedValue(undefined);
-    existingFolders = new Set<string>();
-    getAbstractFileByPath = jest.fn((path: string) => existingFolders.has(path) ? ({ path }) : null);
-    createFolder = jest.fn(async (path: string) => {
-      existingFolders.add(path);
+    vault = createMockVault();
+
+    // Setup folder tracking
+    existingFolders = setupFolderTracking(vault);
+
+    // Setup event handlers
+    vault.on.mockImplementation((event: string, cb: any) => {
+      if (event === 'modify') {
+        handleModify = cb;
+      }
+      return {};
     });
-    const vault = {
-      on: jest.fn((event: string, cb: any) => {
-        if (event === 'modify') {
-          handleModify = cb;
-        }
-        return {};
-      }),
-      getName: jest.fn().mockReturnValue('TestVault'),
-      getAbstractFileByPath,
-      createFolder,
-      getMarkdownFiles: jest.fn().mockReturnValue([]),
-    };
-    const app = { metadataCache, fileManager: { renameFile }, vault } as any;
-    const manifest = {
-      id: 'obsidian-vault-organizer',
-      name: 'Vault Organizer',
-      version: '1.0.0',
-      minAppVersion: '1.0.0',
-      description: '',
-      author: '',
-      authorUrl: '',
-      dir: 'vault-organizer',
-      isDesktopOnly: false,
-    } as const;
-    plugin = new VaultOrganizer(app, manifest as any);
+
+    // Setup app and plugin
+    const app = {
+      metadataCache,
+      fileManager: createMockFileManager({ renameFile }),
+      vault
+    } as any;
+
+    plugin = new VaultOrganizer(app, TEST_MANIFEST as any);
     plugin.addSettingTab = jest.fn();
     (plugin as any).addCommand = jest.fn();
     await plugin.onload();
@@ -541,7 +421,7 @@ describe('Edge Cases - Symlinks (Conceptual Tests)', () => {
       await plugin.saveSettingsWithoutReorganizing();
 
       // Simulate a file that might be accessed via different paths
-      const file = createTFile('SharedFolder/Document.md');
+      const file = createMockFile('SharedFolder/Document.md');
       metadataCache.getFileCache.mockReturnValue({ frontmatter: { type: 'note' } });
 
       await handleModify(file);
@@ -552,7 +432,7 @@ describe('Edge Cases - Symlinks (Conceptual Tests)', () => {
       plugin.settings.rules.push({ key: 'dest', value: 'same', destination: 'A/../A', enabled: true });
       await plugin.saveSettingsWithoutReorganizing();
 
-      const file = createTFile('Test.md');
+      const file = createMockFile('Test.md');
       metadataCache.getFileCache.mockReturnValue({ frontmatter: { dest: 'same' } });
 
       // The path validation should catch this
@@ -573,7 +453,7 @@ describe('Edge Cases - Symlinks (Conceptual Tests)', () => {
       await plugin.saveSettingsWithoutReorganizing();
 
       // Obsidian normalizes all paths, so different representations should be equivalent
-      const file = createTFile('folder/./subfolder/../file.md');
+      const file = createMockFile('folder/./subfolder/../file.md');
       metadataCache.getFileCache.mockReturnValue({ frontmatter: { category: 'docs' } });
 
       await handleModify(file);
@@ -586,48 +466,36 @@ describe('Edge Cases - Symlinks (Conceptual Tests)', () => {
 describe('Edge Cases - Case Sensitivity', () => {
   let metadataCache: { getFileCache: jest.Mock; on: jest.Mock };
   let renameFile: jest.Mock;
-  let createFolder: jest.Mock;
-  let getAbstractFileByPath: jest.Mock;
   let existingFolders: Set<string>;
   let plugin: VaultOrganizer;
   let handleModify: (file: any) => Promise<void>;
+  let vault: ReturnType<typeof createMockVault>;
 
   beforeEach(async () => {
-    metadataCache = {
-      getFileCache: jest.fn(),
-      on: jest.fn(() => ({})),
-    };
+    // Setup mocks using shared utilities
+    metadataCache = createMockMetadataCache();
     renameFile = jest.fn().mockResolvedValue(undefined);
-    existingFolders = new Set<string>();
-    getAbstractFileByPath = jest.fn((path: string) => existingFolders.has(path) ? ({ path }) : null);
-    createFolder = jest.fn(async (path: string) => {
-      existingFolders.add(path);
+    vault = createMockVault();
+
+    // Setup folder tracking
+    existingFolders = setupFolderTracking(vault);
+
+    // Setup event handlers
+    vault.on.mockImplementation((event: string, cb: any) => {
+      if (event === 'modify') {
+        handleModify = cb;
+      }
+      return {};
     });
-    const vault = {
-      on: jest.fn((event: string, cb: any) => {
-        if (event === 'modify') {
-          handleModify = cb;
-        }
-        return {};
-      }),
-      getName: jest.fn().mockReturnValue('TestVault'),
-      getAbstractFileByPath,
-      createFolder,
-      getMarkdownFiles: jest.fn().mockReturnValue([]),
-    };
-    const app = { metadataCache, fileManager: { renameFile }, vault } as any;
-    const manifest = {
-      id: 'obsidian-vault-organizer',
-      name: 'Vault Organizer',
-      version: '1.0.0',
-      minAppVersion: '1.0.0',
-      description: '',
-      author: '',
-      authorUrl: '',
-      dir: 'vault-organizer',
-      isDesktopOnly: false,
-    } as const;
-    plugin = new VaultOrganizer(app, manifest as any);
+
+    // Setup app and plugin
+    const app = {
+      metadataCache,
+      fileManager: createMockFileManager({ renameFile }),
+      vault
+    } as any;
+
+    plugin = new VaultOrganizer(app, TEST_MANIFEST as any);
     plugin.addSettingTab = jest.fn();
     (plugin as any).addCommand = jest.fn();
     await plugin.onload();
@@ -644,7 +512,7 @@ describe('Edge Cases - Case Sensitivity', () => {
     });
     await plugin.saveSettingsWithoutReorganizing();
 
-    const file = createTFile('Note.md');
+    const file = createMockFile('Note.md');
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { title: 'café' } });
 
     await handleModify(file);
@@ -661,7 +529,7 @@ describe('Edge Cases - Case Sensitivity', () => {
     });
     await plugin.saveSettingsWithoutReorganizing();
 
-    const file = createTFile('Note.md');
+    const file = createMockFile('Note.md');
     metadataCache.getFileCache.mockReturnValue({ frontmatter: { title: 'STRASSE' } });
 
     await handleModify(file);

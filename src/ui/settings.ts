@@ -24,6 +24,14 @@ export class RuleSettingTab extends PluginSettingTab {
     private aggregatedTags: string[] = [];
     private frontmatterKeys: string[] = [];
 
+    /**
+     * Creates a new rule settings tab for the VaultOrganizer plugin.
+     * Initializes debounced save handlers, refreshes metadata cache (tags and frontmatter keys),
+     * and sets up event listeners for metadata updates.
+     *
+     * @param app - The Obsidian app instance
+     * @param plugin - The VaultOrganizer plugin instance
+     */
     constructor(app: App, plugin: VaultOrganizer) {
         super(app, plugin);
         this.plugin = plugin;
@@ -119,6 +127,19 @@ export class RuleSettingTab extends PluginSettingTab {
         return nextValues.join(' ');
     }
 
+    /**
+     * Displays the settings tab UI with all rule configurations.
+     * Creates UI controls for each rule including:
+     * - Enable/disable toggle
+     * - Rule ordering controls (up/down arrows)
+     * - Frontmatter key and value inputs with picker buttons
+     * - Destination folder input
+     * - Match type dropdown (equals, contains, regex, etc.)
+     * - Case sensitivity and debug toggles
+     * - Remove button
+     * Also provides buttons to add new rules, apply changes, and test all rules.
+     * Overrides PluginSettingTab.display().
+     */
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
@@ -426,6 +447,14 @@ export class RuleSettingTab extends PluginSettingTab {
                     }));
     }
 
+    /**
+     * Refreshes validation warnings/errors for all rules in the settings UI.
+     * Updates the warning message elements to show:
+     * - Invalid regex errors
+     * - Missing required values for match types that need them
+     * - Enabled/disabled state styling
+     * This method is called to update the UI without re-rendering the entire settings tab.
+     */
     refreshWarnings() {
         const { containerEl } = this;
         if (!containerEl) {
