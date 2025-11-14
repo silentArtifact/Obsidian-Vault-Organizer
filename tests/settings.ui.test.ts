@@ -33,8 +33,15 @@ jest.mock('obsidian', () => {
       this.settingEl.classList.add('setting-item');
       containerEl.appendChild(this.settingEl);
     }
-    setName(_name: string) { return this; }
+    setName(name: string) {
+      const nameEl = document.createElement('div');
+      nameEl.classList.add('setting-item-name');
+      nameEl.textContent = name;
+      this.settingEl.insertBefore(nameEl, this.settingEl.firstChild);
+      return this;
+    }
     setDesc(_desc: string) { return this; }
+    setClass(className: string) { this.settingEl.classList.add(className); return this; }
     addText(cb: (api: any) => void) {
       const input = document.createElement('input');
       input.type = 'text';
@@ -592,6 +599,354 @@ describe('settings UI', () => {
     );
     expect(errorElement).toBeDefined();
     expect(errorElement?.classList.contains('vault-organizer-rule-error')).toBe(true);
+  });
+
+  describe('multi-condition UI', () => {
+    it('allows adding conditions to a rule via the + button', async () => {
+      await fireEvent.click(screen.getByText('Add Rule'));
+      await flushPromises();
+
+      // Set up the primary rule
+      const keyInput = await screen.findByPlaceholderText('key') as HTMLInputElement;
+      await fireEvent.input(keyInput, { target: { value: 'status' } });
+      await jest.runOnlyPendingTimersAsync();
+
+      const valueInput = screen.getAllByPlaceholderText('value')[0] as HTMLInputElement;
+      await fireEvent.input(valueInput, { target: { value: 'active' } });
+      await jest.runOnlyPendingTimersAsync();
+
+      const destInput = await screen.findByPlaceholderText('destination folder (supports {variables})') as HTMLInputElement;
+      await fireEvent.input(destInput, { target: { value: 'Active' } });
+      await jest.runOnlyPendingTimersAsync();
+      await flushPromises();
+
+      // Add a condition
+      const addConditionButton = screen.getByTitle('Add another condition to this rule');
+      await fireEvent.click(addConditionButton);
+      await flushPromises();
+
+      // Verify the condition was added to settings
+      expect(plugin.settings.rules[0].conditions).toBeDefined();
+      expect(plugin.settings.rules[0].conditions?.length).toBe(1);
+      expect(plugin.settings.rules[0].conditions?.[0]).toEqual({
+        key: '',
+        value: '',
+        matchType: 'equals'
+      });
+
+      // Verify the UI was re-rendered with the condition
+      const conditionName = await screen.findByText('Additional Conditions 1');
+      expect(conditionName).toBeDefined();
+    });
+
+    it('allows editing condition properties', async () => {
+      await fireEvent.click(screen.getByText('Add Rule'));
+      await flushPromises();
+
+      // Add a condition
+      const addConditionButton = screen.getByTitle('Add another condition to this rule');
+      await fireEvent.click(addConditionButton);
+      await flushPromises();
+
+      // Get all key inputs - index 0 is the main rule, index 1 is the condition
+      const allKeyInputs = screen.getAllByPlaceholderText('key') as HTMLInputElement[];
+      expect(allKeyInputs.length).toBe(2);
+      const conditionKeyInput = allKeyInputs[1];
+
+      // Edit condition key
+      await fireEvent.input(conditionKeyInput, { target: { value: 'priority' } });
+      await jest.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+
+      expect(plugin.settings.rules[0].conditions?.[0].key).toBe('priority');
+
+      // Get all value inputs - index 0 is the main rule, index 1 is the condition
+      const allValueInputs = screen.getAllByPlaceholderText('value') as HTMLInputElement[];
+      expect(allValueInputs.length).toBe(2);
+      const conditionValueInput = allValueInputs[1];
+
+      // Edit condition value
+      await fireEvent.input(conditionValueInput, { target: { value: 'high' } });
+      await jest.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+
+      expect(plugin.settings.rules[0].conditions?.[0].value).toBe('high');
+    });
+
+    it('allows removing conditions via the Remove Condition button', async () => {
+      await fireEvent.click(screen.getByText('Add Rule'));
+      await flushPromises();
+
+      // Add two conditions
+      const addConditionButton = screen.getByTitle('Add another condition to this rule');
+      await fireEvent.click(addConditionButton);
+      await flushPromises();
+      await fireEvent.click(addConditionButton);
+      await flushPromises();
+
+      expect(plugin.settings.rules[0].conditions?.length).toBe(2);
+
+      // Remove the first condition
+      const removeButtons = screen.getAllByText('Remove Condition');
+      expect(removeButtons.length).toBe(2);
+      await fireEvent.click(removeButtons[0]);
+      await flushPromises();
+
+      // Verify the first condition was removed
+      expect(plugin.settings.rules[0].conditions?.length).toBe(1);
+    });
+
+    it('allows changing the condition operator between AND/OR', async () => {
+      await fireEvent.click(screen.getByText('Add Rule'));
+      await flushPromises();
+
+      // Get the condition operator dropdown
+      const operatorSelects = screen.getAllByLabelText('Condition operator') as HTMLSelectElement[];
+      expect(operatorSelects.length).toBe(1);
+      const operatorSelect = operatorSelects[0];
+
+      // Check default value is AND
+      expect(plugin.settings.rules[0].conditionOperator).toBeUndefined(); // Default
+      expect(operatorSelect.value).toBe('AND');
+
+      // Change to OR
+      await fireEvent.change(operatorSelect, { target: { value: 'OR' } });
+      await jest.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+
+      expect(plugin.settings.rules[0].conditionOperator).toBe('OR');
+    });
+
+    it('allows changing condition match type and handles regex controls', async () => {
+      await fireEvent.click(screen.getByText('Add Rule'));
+      await flushPromises();
+
+      // Add a condition
+      const addConditionButton = screen.getByTitle('Add another condition to this rule');
+      await fireEvent.click(addConditionButton);
+      await flushPromises();
+
+      // Get all match type selects - index 0 is main rule, index 1 is condition
+      const allMatchTypeSelects = screen.getAllByLabelText('Match type') as HTMLSelectElement[];
+      expect(allMatchTypeSelects.length).toBe(2);
+      const conditionMatchTypeSelect = allMatchTypeSelects[1];
+
+      // Get all flags inputs - index 0 is main rule, index 1 is condition
+      const allFlagsInputs = screen.getAllByPlaceholderText('flags') as HTMLInputElement[];
+      expect(allFlagsInputs.length).toBe(2);
+      const conditionFlagsInput = allFlagsInputs[1];
+
+      // Flags should be hidden initially
+      expect(conditionFlagsInput.style.display).toBe('none');
+      expect(conditionFlagsInput.disabled).toBe(true);
+
+      // Change to regex
+      await fireEvent.change(conditionMatchTypeSelect, { target: { value: 'regex' } });
+      await flushPromises();
+
+      expect(plugin.settings.rules[0].conditions?.[0].matchType).toBe('regex');
+      expect(plugin.settings.rules[0].conditions?.[0].isRegex).toBe(true);
+      expect(plugin.settings.rules[0].conditions?.[0].flags).toBe('');
+
+      // Flags should now be visible
+      expect(conditionFlagsInput.style.display).toBe('');
+      expect(conditionFlagsInput.disabled).toBe(false);
+
+      // Add flags
+      await fireEvent.input(conditionFlagsInput, { target: { value: 'i' } });
+      await jest.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+
+      expect(plugin.settings.rules[0].conditions?.[0].flags).toBe('i');
+    });
+
+    it('allows toggling case insensitive for conditions', async () => {
+      await fireEvent.click(screen.getByText('Add Rule'));
+      await flushPromises();
+
+      // Add a condition
+      const addConditionButton = screen.getByTitle('Add another condition to this rule');
+      await fireEvent.click(addConditionButton);
+      await flushPromises();
+
+      // Get all case insensitive toggles - index 0 is main rule, index 1 is condition
+      const allCaseToggles = screen.getAllByTitle('Case insensitive matching') as HTMLInputElement[];
+      expect(allCaseToggles.length).toBe(2);
+      const conditionCaseToggle = allCaseToggles[1];
+
+      // Check default value
+      expect(conditionCaseToggle.checked).toBe(false);
+      expect(plugin.settings.rules[0].conditions?.[0].caseInsensitive).toBeUndefined();
+
+      // Toggle on
+      await fireEvent.click(conditionCaseToggle);
+      await flushPromises();
+
+      expect(plugin.settings.rules[0].conditions?.[0].caseInsensitive).toBe(true);
+    });
+
+    it('hides case insensitive toggle when condition match type is regex', async () => {
+      await fireEvent.click(screen.getByText('Add Rule'));
+      await flushPromises();
+
+      // Add a condition
+      const addConditionButton = screen.getByTitle('Add another condition to this rule');
+      await fireEvent.click(addConditionButton);
+      await flushPromises();
+
+      // Get all match type selects and case toggles
+      const allMatchTypeSelects = screen.getAllByLabelText('Match type') as HTMLSelectElement[];
+      const allCaseToggles = screen.getAllByTitle('Case insensitive matching') as HTMLInputElement[];
+      const conditionMatchTypeSelect = allMatchTypeSelects[1];
+      const conditionCaseToggle = allCaseToggles[1];
+
+      // Case toggle should be visible initially
+      expect(conditionCaseToggle.style.display).toBe('');
+
+      // Change to regex
+      await fireEvent.change(conditionMatchTypeSelect, { target: { value: 'regex' } });
+      await flushPromises();
+
+      // Case toggle should now be hidden
+      expect(conditionCaseToggle.style.display).toBe('none');
+    });
+
+    it('persists multiple conditions with all properties', async () => {
+      await fireEvent.click(screen.getByText('Add Rule'));
+      await flushPromises();
+
+      // Set up primary rule
+      const keyInput = screen.getAllByPlaceholderText('key')[0] as HTMLInputElement;
+      await fireEvent.input(keyInput, { target: { value: 'status' } });
+      await jest.runOnlyPendingTimersAsync();
+
+      const valueInput = screen.getAllByPlaceholderText('value')[0] as HTMLInputElement;
+      await fireEvent.input(valueInput, { target: { value: 'active' } });
+      await jest.runOnlyPendingTimersAsync();
+
+      const destInput = await screen.findByPlaceholderText('destination folder (supports {variables})') as HTMLInputElement;
+      await fireEvent.input(destInput, { target: { value: 'Active' } });
+      await jest.runOnlyPendingTimersAsync();
+      await flushPromises();
+
+      // Set condition operator to OR
+      const operatorSelect = screen.getByLabelText('Condition operator') as HTMLSelectElement;
+      await fireEvent.change(operatorSelect, { target: { value: 'OR' } });
+      await jest.runOnlyPendingTimersAsync();
+
+      // Add first condition
+      const addConditionButton = screen.getByTitle('Add another condition to this rule');
+      await fireEvent.click(addConditionButton);
+      await flushPromises();
+
+      // Edit first condition
+      const conditionKey1 = screen.getAllByPlaceholderText('key')[1] as HTMLInputElement;
+      await fireEvent.input(conditionKey1, { target: { value: 'priority' } });
+      await jest.runOnlyPendingTimersAsync();
+
+      const conditionValue1 = screen.getAllByPlaceholderText('value')[1] as HTMLInputElement;
+      await fireEvent.input(conditionValue1, { target: { value: 'high' } });
+      await jest.runOnlyPendingTimersAsync();
+
+      // Add second condition
+      await fireEvent.click(addConditionButton);
+      await flushPromises();
+
+      // Edit second condition with regex
+      const conditionKey2 = screen.getAllByPlaceholderText('key')[2] as HTMLInputElement;
+      await fireEvent.input(conditionKey2, { target: { value: 'tag' } });
+      await jest.runOnlyPendingTimersAsync();
+
+      const conditionValue2 = screen.getAllByPlaceholderText('value')[2] as HTMLInputElement;
+      await fireEvent.input(conditionValue2, { target: { value: 'important' } });
+      await jest.runOnlyPendingTimersAsync();
+
+      const conditionMatchType2 = screen.getAllByLabelText('Match type')[2] as HTMLSelectElement;
+      await fireEvent.change(conditionMatchType2, { target: { value: 'contains' } });
+      await flushPromises();
+
+      const conditionCaseToggle2 = screen.getAllByTitle('Case insensitive matching')[2] as HTMLInputElement;
+      await fireEvent.click(conditionCaseToggle2);
+      await flushPromises();
+
+      // Verify final state
+      expect(plugin.settings.rules[0]).toMatchObject({
+        key: 'status',
+        value: 'active',
+        destination: 'Active',
+        matchType: 'equals',
+        conditionOperator: 'OR',
+        conditions: [
+          {
+            key: 'priority',
+            value: 'high',
+            matchType: 'equals'
+          },
+          {
+            key: 'tag',
+            value: 'important',
+            matchType: 'contains',
+            caseInsensitive: true
+          }
+        ]
+      });
+    });
+
+    it('allows using frontmatter key picker for conditions', async () => {
+      await fireEvent.click(screen.getByText('Add Rule'));
+      await flushPromises();
+
+      // Add a condition
+      const addConditionButton = screen.getByTitle('Add another condition to this rule');
+      await fireEvent.click(addConditionButton);
+      await flushPromises();
+
+      // Get all frontmatter key buttons - index 0 is main rule, index 1 is condition
+      const keyButtons = screen.getAllByTitle('Browse frontmatter keys');
+      expect(keyButtons.length).toBe(2);
+      const conditionKeyButton = keyButtons[1];
+
+      await fireEvent.click(conditionKeyButton);
+
+      const modalInstance = (FuzzySuggestModal as any).__instances.pop();
+      expect(modalInstance).toBeDefined();
+      modalInstance.onChooseItem('category');
+
+      await jest.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+
+      const conditionKeyInput = screen.getAllByPlaceholderText('key')[1] as HTMLInputElement;
+      expect(conditionKeyInput.value).toBe('category');
+      expect(plugin.settings.rules[0].conditions?.[0].key).toBe('category');
+    });
+
+    it('allows using tag picker for condition values', async () => {
+      await fireEvent.click(screen.getByText('Add Rule'));
+      await flushPromises();
+
+      // Add a condition
+      const addConditionButton = screen.getByTitle('Add another condition to this rule');
+      await fireEvent.click(addConditionButton);
+      await flushPromises();
+
+      // Get all tag buttons - index 0 is main rule, index 1 is condition
+      const tagButtons = screen.getAllByTitle('Browse tags');
+      expect(tagButtons.length).toBe(2);
+      const conditionTagButton = tagButtons[1];
+
+      await fireEvent.click(conditionTagButton);
+
+      const modalInstance = (FuzzySuggestModal as any).__instances.pop();
+      expect(modalInstance).toBeDefined();
+      modalInstance.onChooseItem('#daily');
+
+      await jest.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+
+      const conditionValueInput = screen.getAllByPlaceholderText('value')[1] as HTMLInputElement;
+      expect(conditionValueInput.value).toBe('#daily');
+      expect(plugin.settings.rules[0].conditions?.[0].value).toBe('#daily');
+    });
   });
 });
 
