@@ -1,5 +1,5 @@
 import { App, PluginSettingTab, Setting, debounce, getAllTags } from 'obsidian';
-import type { TextComponent } from 'obsidian';
+import type { TextComponent, ToggleComponent } from 'obsidian';
 import type VaultOrganizer from '../../main';
 import type { FrontmatterMatchType } from '../rules';
 import { requiresValue, hasValidValue } from '../rules';
@@ -279,8 +279,7 @@ export class RuleSettingTab extends PluginSettingTab {
                         this.scheduleSaveOnly();
                     }));
             let flagsTextComponent: TextComponent | undefined;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            let caseInsensitiveToggleComponent: any;
+            let caseInsensitiveToggleComponent: ToggleComponent | undefined;
             const updateRegexControlsVisibility = () => {
                 const currentRule = this.plugin.settings.rules[index];
                 const isRegex = (currentRule?.matchType ?? 'equals') === 'regex';
