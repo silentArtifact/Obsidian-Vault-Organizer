@@ -17,12 +17,14 @@ export interface VaultOrganizerSettings {
     rules: SerializedFrontmatterRule[];
     moveHistory: MoveHistoryEntry[];
     maxHistorySize: number;
+    confirmBeforeBulkMove: boolean;
 }
 
 export const DEFAULT_SETTINGS: VaultOrganizerSettings = {
     rules: [],
     moveHistory: [],
     maxHistorySize: 50,
+    confirmBeforeBulkMove: true,
 };
 
 export type RuleTestResult = {

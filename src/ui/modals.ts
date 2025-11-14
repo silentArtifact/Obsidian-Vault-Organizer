@@ -268,3 +268,136 @@ export class MoveHistoryModal extends Modal {
         contentEl.empty();
     }
 }
+
+/**
+ * Modal for confirming bulk file moves before execution.
+ * Shows preview of affected files and allows user to proceed or cancel.
+ */
+export class BulkMoveConfirmationModal extends Modal {
+    private onConfirm: () => void;
+    private onCancel: () => void;
+    private validMoves: number;
+    private errorCount: number;
+    private results: RuleTestResult[];
+
+    constructor(
+        app: App,
+        results: RuleTestResult[],
+        onConfirm: () => void,
+        onCancel: () => void
+    ) {
+        super(app);
+        this.results = results;
+        this.onConfirm = onConfirm;
+        this.onCancel = onCancel;
+        this.validMoves = results.filter(r => r.newPath && !r.error).length;
+        this.errorCount = results.filter(r => r.error).length;
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+
+        contentEl.createEl('h2', { text: 'Confirm Bulk File Move' });
+
+        // Summary section
+        const summaryEl = contentEl.createDiv({ cls: 'vault-organizer-confirmation-summary' });
+        summaryEl.createEl('p', {
+            text: `${this.validMoves} file(s) will be moved based on your enabled rules.`
+        });
+
+        if (this.errorCount > 0) {
+            const warningEl = summaryEl.createEl('p', {
+                text: `⚠️ ${this.errorCount} file(s) have invalid destinations and will be skipped.`,
+                cls: 'vault-organizer-warning-text'
+            });
+            warningEl.style.color = 'var(--text-warning)';
+        }
+
+        // Preview section (show first 10 moves)
+        if (this.validMoves > 0) {
+            const previewTitle = contentEl.createEl('h3', { text: 'Preview (first 10 moves)' });
+            previewTitle.style.marginTop = '1em';
+
+            const previewContainer = contentEl.createDiv({ cls: 'vault-organizer-preview-container' });
+            previewContainer.style.maxHeight = '300px';
+            previewContainer.style.overflowY = 'auto';
+            previewContainer.style.marginBottom = '1em';
+            previewContainer.style.padding = '0.5em';
+            previewContainer.style.backgroundColor = 'var(--background-secondary)';
+            previewContainer.style.borderRadius = '4px';
+
+            const validResults = this.results.filter(r => r.newPath && !r.error).slice(0, 10);
+            validResults.forEach(result => {
+                const moveEl = previewContainer.createDiv({ cls: 'vault-organizer-preview-item' });
+                moveEl.style.marginBottom = '0.5em';
+                moveEl.style.padding = '0.5em';
+                moveEl.style.borderLeft = '2px solid var(--interactive-accent)';
+
+                moveEl.createEl('div', {
+                    text: `📄 ${result.file.basename}`,
+                    cls: 'vault-organizer-file-name'
+                }).style.fontWeight = 'bold';
+
+                const pathsEl = moveEl.createDiv();
+                pathsEl.style.fontSize = '0.9em';
+                pathsEl.style.color = 'var(--text-muted)';
+                pathsEl.createSpan({ text: `From: ${result.currentPath}` });
+                pathsEl.createEl('br');
+                pathsEl.createSpan({ text: `To: ${result.newPath}` });
+            });
+
+            if (this.validMoves > 10) {
+                const moreText = previewContainer.createEl('p', {
+                    text: `... and ${this.validMoves - 10} more file(s)`
+                });
+                moreText.style.textAlign = 'center';
+                moreText.style.color = 'var(--text-muted)';
+                moreText.style.fontStyle = 'italic';
+            }
+        }
+
+        // Warning message
+        const warningBox = contentEl.createDiv({ cls: 'vault-organizer-warning-box' });
+        warningBox.style.padding = '1em';
+        warningBox.style.marginBottom = '1em';
+        warningBox.style.backgroundColor = 'var(--background-modifier-error)';
+        warningBox.style.borderRadius = '4px';
+
+        warningBox.createEl('p', {
+            text: '⚠️ This action cannot be undone for all files at once. You can undo individual moves from the move history.'
+        }).style.margin = '0';
+
+        // Buttons
+        const buttonContainer = contentEl.createDiv({ cls: 'vault-organizer-button-container' });
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.justifyContent = 'flex-end';
+        buttonContainer.style.gap = '0.5em';
+        buttonContainer.style.marginTop = '1em';
+
+        const cancelButton = buttonContainer.createEl('button', { text: 'Cancel' });
+        cancelButton.onclick = () => {
+            this.onCancel();
+            this.close();
+        };
+
+        const confirmButton = buttonContainer.createEl('button', {
+            text: `Move ${this.validMoves} file(s)`,
+            cls: 'mod-cta'
+        });
+        confirmButton.onclick = () => {
+            this.onConfirm();
+            this.close();
+        };
+
+        // Disable confirm if no valid moves
+        if (this.validMoves === 0) {
+            confirmButton.disabled = true;
+        }
+    }
+
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
+    }
+}

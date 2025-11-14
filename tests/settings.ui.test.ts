@@ -22,6 +22,13 @@ jest.mock('obsidian', () => {
     constructor(_app: any, _plugin: any) {
       this.containerEl = document.createElement('div');
       (this.containerEl as any).empty = () => { this.containerEl.innerHTML = ''; };
+      (this.containerEl as any).createEl = (tag: string, options?: { text?: string; cls?: string }) => {
+        const el = document.createElement(tag);
+        if (options?.text) el.textContent = options.text;
+        if (options?.cls) el.className = options.cls;
+        this.containerEl.appendChild(el);
+        return el;
+      };
       document.body.appendChild(this.containerEl);
     }
   }

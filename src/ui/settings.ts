@@ -410,6 +410,20 @@ export class RuleSettingTab extends PluginSettingTab {
                         const results = this.plugin.testAllRules();
                         new TestAllRulesModal(this.app, results, this.plugin.settings.rules).open();
                     }));
+
+        containerEl.createEl('h3', { text: 'General Settings' });
+
+        new Setting(containerEl)
+            .setName('Confirm before bulk moves')
+            .setDesc('Show a confirmation dialog before moving multiple files with "Apply now". This helps prevent accidental mass file moves.')
+            .addToggle(toggle =>
+                toggle
+                    .setValue(this.plugin.settings.confirmBeforeBulkMove ?? true)
+                    .onChange(async (value) => {
+                        this.plugin.settings.confirmBeforeBulkMove = value;
+                        this.cancelPendingSaveOnly();
+                        await this.plugin.saveSettingsWithoutReorganizing();
+                    }));
     }
 
     refreshWarnings() {

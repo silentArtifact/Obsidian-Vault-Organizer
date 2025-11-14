@@ -171,6 +171,8 @@ describe('handleFileChange', () => {
     addCommandMock = jest.fn((command) => { registeredCommands.push(command); return command; });
     (plugin as any).addCommand = addCommandMock;
     await plugin.onload();
+    // Disable bulk move confirmation for tests (after onload so settings exist)
+    plugin.settings.confirmBeforeBulkMove = false;
     handle = fileEventHandlers['modify'] as typeof handle;
     expect(metadataCache.on).toHaveBeenCalledWith('changed', expect.any(Function));
     expect(vault.on).toHaveBeenCalledWith('rename', expect.any(Function));

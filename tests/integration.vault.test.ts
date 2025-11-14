@@ -175,6 +175,8 @@ describe('Integration Tests - Realistic Vault Scenarios', () => {
     addCommandMock = jest.fn((command) => { registeredCommands.push(command); return command; });
     (plugin as any).addCommand = addCommandMock;
     await plugin.onload();
+    // Disable bulk move confirmation for tests (after onload so settings exist)
+    plugin.settings.confirmBeforeBulkMove = false;
     expect(handleModify).toBeDefined();
     (Notice as jest.Mock).mockClear();
     renameFile.mockClear();

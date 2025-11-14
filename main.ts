@@ -16,6 +16,9 @@ import {
     categorizeError,
 } from './src/errors';
 import {
+    BulkMoveConfirmationModal,
+} from './src/ui/modals';
+import {
     validateDestinationPath,
     validatePath,
 } from './src/pathSanitization';
@@ -359,12 +362,52 @@ export default class VaultOrganizer extends Plugin {
         }
     }
 
+    /**
+     * Reorganizes all markdown files in the vault according to enabled rules.
+     * If confirmBeforeBulkMove setting is enabled, shows a confirmation dialog first.
+     *
+     * @private
+     */
     private async reorganizeAllMarkdownFiles(): Promise<void> {
         const markdownFiles = this.app.vault.getMarkdownFiles?.();
         if (!markdownFiles?.length) {
             return;
         }
 
+        // If confirmation is enabled, test rules first and show confirmation modal
+        if (this.settings.confirmBeforeBulkMove) {
+            const results = this.testAllRules();
+            const validMoves = results.filter(r => r.newPath && !r.error);
+
+            // If no files need to be moved, notify user and return
+            if (validMoves.length === 0) {
+                new Notice('No files need to be moved. All files are already in their correct locations.');
+                return;
+            }
+
+            // Show confirmation modal and wait for user decision
+            return new Promise<void>((resolve) => {
+                const modal = new BulkMoveConfirmationModal(
+                    this.app,
+                    results,
+                    async () => {
+                        // User confirmed - proceed with moves
+                        for (const file of markdownFiles) {
+                            await this.applyRulesToFile(file);
+                        }
+                        resolve();
+                    },
+                    () => {
+                        // User canceled
+                        new Notice('Bulk move canceled.');
+                        resolve();
+                    }
+                );
+                modal.open();
+            });
+        }
+
+        // No confirmation needed - proceed directly
         for (const file of markdownFiles) {
             await this.applyRulesToFile(file);
         }
