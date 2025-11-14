@@ -4,6 +4,7 @@ import type {
     SerializedFrontmatterRule,
 } from './rules';
 import type { InvalidPathError } from './errors';
+import { MATCH_TYPES } from './constants';
 
 export interface MoveHistoryEntry {
     timestamp: number;
@@ -35,11 +36,11 @@ export type RuleTestResult = {
 };
 
 export const MATCH_TYPE_OPTIONS: { value: FrontmatterMatchType; label: string }[] = [
-    { value: 'equals', label: 'Equals' },
-    { value: 'contains', label: 'Contains' },
-    { value: 'starts-with', label: 'Starts with' },
-    { value: 'ends-with', label: 'Ends with' },
-    { value: 'regex', label: 'Regular expression' },
+    { value: 'equals', label: MATCH_TYPES.equals },
+    { value: 'contains', label: MATCH_TYPES.contains },
+    { value: 'starts-with', label: MATCH_TYPES['starts-with'] },
+    { value: 'ends-with', label: MATCH_TYPES['ends-with'] },
+    { value: 'regex', label: MATCH_TYPES.regex },
 ];
 
 /**

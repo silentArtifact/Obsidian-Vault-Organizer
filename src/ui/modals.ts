@@ -2,6 +2,7 @@ import { App, FuzzySuggestModal, Modal, Notice } from 'obsidian';
 import type VaultOrganizer from '../../main';
 import type { RuleTestResult } from '../types';
 import type { SerializedFrontmatterRule } from '../rules';
+import { MODALS } from '../constants';
 
 /**
  * Modal that allows users to search and select from a list of tags.
@@ -131,18 +132,18 @@ export class TestAllRulesModal extends Modal {
         const { contentEl } = this;
         contentEl.empty();
 
-        contentEl.createEl('h2', { text: 'Test All Rules - Preview' });
+        contentEl.createEl('h2', { text: MODALS.TEST_ALL_RULES.TITLE });
 
         const validResults = this.results.filter(result => result.newPath && !result.error);
         const invalidResults = this.results.filter(result => result.error);
 
         if (validResults.length === 0 && invalidResults.length === 0) {
             contentEl.createEl('p', {
-                text: 'No files would be moved. All files are either already in the correct location or have no matching rules.',
+                text: MODALS.TEST_ALL_RULES.NO_MOVES_OVERALL,
             });
         } else {
             if (validResults.length) {
-                contentEl.createEl('p', { text: `${validResults.length} file(s) would be moved:` });
+                contentEl.createEl('p', { text: MODALS.TEST_ALL_RULES.FILES_WOULD_MOVE(validResults.length) });
 
                 const resultsContainer = contentEl.createDiv({ cls: 'vault-organizer-test-results' });
                 resultsContainer.style.maxHeight = '400px';
@@ -157,35 +158,35 @@ export class TestAllRulesModal extends Modal {
                     resultEl.style.borderRadius = '4px';
 
                     const fileEl = resultEl.createDiv();
-                    fileEl.createEl('strong', { text: 'File: ' });
+                    fileEl.createEl('strong', { text: MODALS.TEST_ALL_RULES.LABELS.FILE });
                     fileEl.createSpan({ text: result.file.basename });
 
                     const fromEl = resultEl.createDiv();
-                    fromEl.createEl('strong', { text: 'From: ' });
+                    fromEl.createEl('strong', { text: MODALS.TEST_ALL_RULES.LABELS.FROM });
                     fromEl.createSpan({ text: result.currentPath });
 
                     const toEl = resultEl.createDiv();
-                    toEl.createEl('strong', { text: 'To: ' });
+                    toEl.createEl('strong', { text: MODALS.TEST_ALL_RULES.LABELS.TO });
                     toEl.createSpan({ text: result.newPath || '(unknown)' });
 
                     const ruleEl = resultEl.createDiv();
-                    ruleEl.createEl('strong', { text: 'Rule: ' });
+                    ruleEl.createEl('strong', { text: MODALS.TEST_ALL_RULES.LABELS.RULE });
                     ruleEl.createSpan({ text: `Rule ${result.ruleIndex + 1} (${this.rules[result.ruleIndex]?.key || 'unknown'})` });
 
                     if (result.warnings?.length) {
                         const warningsEl = resultEl.createDiv();
-                        warningsEl.createEl('strong', { text: 'Warnings: ' });
+                        warningsEl.createEl('strong', { text: MODALS.TEST_ALL_RULES.LABELS.WARNINGS });
                         warningsEl.createSpan({ text: result.warnings.join('; ') });
                     }
                 });
             } else {
                 contentEl.createEl('p', {
-                    text: 'No files would be moved. All matching files are already in the correct location.',
+                    text: MODALS.TEST_ALL_RULES.NO_MOVES_ALREADY_CORRECT,
                 });
             }
 
             if (invalidResults.length) {
-                contentEl.createEl('h3', { text: 'Skipped due to invalid destinations' });
+                contentEl.createEl('h3', { text: MODALS.TEST_ALL_RULES.SKIPPED_SECTION });
                 const skippedContainer = contentEl.createDiv({ cls: 'vault-organizer-test-results' });
                 skippedContainer.style.maxHeight = '400px';
                 skippedContainer.style.overflowY = 'auto';
@@ -199,26 +200,26 @@ export class TestAllRulesModal extends Modal {
                     resultEl.style.borderRadius = '4px';
 
                     const fileEl = resultEl.createDiv();
-                    fileEl.createEl('strong', { text: 'File: ' });
+                    fileEl.createEl('strong', { text: MODALS.TEST_ALL_RULES.LABELS.FILE });
                     fileEl.createSpan({ text: result.file.basename });
 
                     const fromEl = resultEl.createDiv();
-                    fromEl.createEl('strong', { text: 'From: ' });
+                    fromEl.createEl('strong', { text: MODALS.TEST_ALL_RULES.LABELS.FROM });
                     fromEl.createSpan({ text: result.currentPath });
 
                     const ruleEl = resultEl.createDiv();
-                    ruleEl.createEl('strong', { text: 'Rule: ' });
+                    ruleEl.createEl('strong', { text: MODALS.TEST_ALL_RULES.LABELS.RULE });
                     ruleEl.createSpan({ text: `Rule ${result.ruleIndex + 1} (${this.rules[result.ruleIndex]?.key || 'unknown'})` });
 
                     const reasonEl = resultEl.createDiv();
                     reasonEl.createEl('strong', { text: 'Reason: ' });
                     reasonEl.createSpan({
-                        text: result.error?.getUserMessage() ?? 'Destination path is invalid and the move cannot be previewed.',
+                        text: result.error?.getUserMessage() ?? MODALS.TEST_ALL_RULES.INVALID_DESTINATION_WARNING,
                     });
 
                     if (result.warnings?.length) {
                         const warningsEl = resultEl.createDiv();
-                        warningsEl.createEl('strong', { text: 'Warnings: ' });
+                        warningsEl.createEl('strong', { text: MODALS.TEST_ALL_RULES.LABELS.WARNINGS });
                         warningsEl.createSpan({ text: result.warnings.join('; ') });
                     }
                 });
@@ -229,7 +230,7 @@ export class TestAllRulesModal extends Modal {
         buttonContainer.style.marginTop = '1.5em';
         buttonContainer.style.textAlign = 'right';
 
-        const closeButton = buttonContainer.createEl('button', { text: 'Close' });
+        const closeButton = buttonContainer.createEl('button', { text: MODALS.TEST_ALL_RULES.BUTTONS.CLOSE });
         closeButton.onclick = () => this.close();
     }
 
@@ -271,13 +272,13 @@ export class MoveHistoryModal extends Modal {
         const { contentEl } = this;
         contentEl.empty();
 
-        contentEl.createEl('h2', { text: 'Move History' });
+        contentEl.createEl('h2', { text: MODALS.MOVE_HISTORY.TITLE });
 
         if (this.plugin.settings.moveHistory.length === 0) {
-            contentEl.createEl('p', { text: 'No move history yet.' });
+            contentEl.createEl('p', { text: MODALS.MOVE_HISTORY.NO_HISTORY });
         } else {
             contentEl.createEl('p', {
-                text: `Showing ${this.plugin.settings.moveHistory.length} of last ${this.plugin.settings.maxHistorySize} moves.`,
+                text: MODALS.MOVE_HISTORY.SHOWING_COUNT(this.plugin.settings.moveHistory.length, this.plugin.settings.maxHistorySize),
             });
 
             const historyContainer = contentEl.createDiv({ cls: 'vault-organizer-history-container' });
@@ -307,7 +308,7 @@ export class MoveHistoryModal extends Modal {
                 const timeStr = date.toLocaleString();
 
                 if (index === 0) {
-                    headerEl.createEl('span', { text: '🔄 Most Recent: ', cls: 'vault-organizer-recent-label' });
+                    headerEl.createEl('span', { text: MODALS.MOVE_HISTORY.MOST_RECENT_PREFIX, cls: 'vault-organizer-recent-label' });
                 }
                 headerEl.createSpan({ text: entry.fileName });
 
@@ -315,25 +316,25 @@ export class MoveHistoryModal extends Modal {
                 timeEl.style.fontSize = '0.9em';
                 timeEl.style.color = 'var(--text-muted)';
                 timeEl.style.marginBottom = '0.5em';
-                timeEl.textContent = `⏰ ${timeStr}`;
+                timeEl.textContent = MODALS.MOVE_HISTORY.TIME_PREFIX(timeStr);
 
                 const fromEl = entryEl.createDiv();
-                fromEl.createEl('strong', { text: 'From: ' });
+                fromEl.createEl('strong', { text: MODALS.MOVE_HISTORY.LABELS.FROM });
                 fromEl.createSpan({ text: entry.fromPath });
 
                 const toEl = entryEl.createDiv();
-                toEl.createEl('strong', { text: 'To: ' });
+                toEl.createEl('strong', { text: MODALS.MOVE_HISTORY.LABELS.TO });
                 toEl.createSpan({ text: entry.toPath });
 
                 const ruleEl = entryEl.createDiv();
-                ruleEl.createEl('strong', { text: 'Rule: ' });
+                ruleEl.createEl('strong', { text: MODALS.MOVE_HISTORY.LABELS.RULE });
                 ruleEl.createSpan({ text: entry.ruleKey || '(unknown)' });
 
                 // Add undo button for most recent move only
                 if (index === 0) {
                     const undoButtonEl = entryEl.createDiv();
                     undoButtonEl.style.marginTop = '0.8em';
-                    const undoButton = undoButtonEl.createEl('button', { text: 'Undo This Move' });
+                    const undoButton = undoButtonEl.createEl('button', { text: MODALS.MOVE_HISTORY.BUTTONS.UNDO });
                     undoButton.style.backgroundColor = 'var(--interactive-accent)';
                     undoButton.style.color = 'var(--text-on-accent)';
                     undoButton.style.padding = '0.4em 0.8em';
@@ -352,16 +353,16 @@ export class MoveHistoryModal extends Modal {
         buttonContainer.style.marginTop = '1.5em';
         buttonContainer.style.textAlign = 'right';
 
-        const clearButton = buttonContainer.createEl('button', { text: 'Clear History' });
+        const clearButton = buttonContainer.createEl('button', { text: MODALS.MOVE_HISTORY.BUTTONS.CLEAR_HISTORY });
         clearButton.style.marginRight = '0.5em';
         clearButton.onclick = async () => {
             this.plugin.settings.moveHistory = [];
             await this.plugin.saveSettings();
-            new Notice('Move history cleared.');
+            new Notice(MODALS.MOVE_HISTORY.NOTICES.HISTORY_CLEARED);
             this.close();
         };
 
-        const closeButton = buttonContainer.createEl('button', { text: 'Close' });
+        const closeButton = buttonContainer.createEl('button', { text: MODALS.MOVE_HISTORY.BUTTONS.CLOSE });
         closeButton.onclick = () => this.close();
     }
 

@@ -5,6 +5,7 @@ import type { FrontmatterMatchType } from '../rules';
 import { requiresValue, hasValidValue } from '../rules';
 import { MATCH_TYPE_OPTIONS, normalizeSerializedRule } from '../types';
 import { RuleTagPickerModal, RuleFrontmatterKeyPickerModal, TestAllRulesModal } from './modals';
+import { SETTINGS_UI } from '../constants';
 
 /**
  * Debounce delay in milliseconds for saving settings changes.
@@ -150,8 +151,8 @@ export class RuleSettingTab extends PluginSettingTab {
         this.plugin.settings.rules.forEach((rule, index) => {
             const currentMatchType: FrontmatterMatchType = rule.matchType ?? 'equals';
             const setting = new Setting(containerEl)
-                .setName(`Rule ${index + 1}`)
-                .setDesc('Destination folder is required before the rule can move files.');
+                .setName(`${SETTINGS_UI.RULE_NAME} ${index + 1}`)
+                .setDesc(SETTINGS_UI.RULE_DESCRIPTION);
             setting.settingEl.classList.add('setting-item');
             const warningEl = document.createElement('div');
             warningEl.classList.add('vault-organizer-rule-message');
@@ -166,7 +167,7 @@ export class RuleSettingTab extends PluginSettingTab {
 
             setting.addToggle(toggle =>
                 toggle
-                    .setTooltip('Activate this rule')
+                    .setTooltip(SETTINGS_UI.TOOLTIPS.ACTIVATE_RULE)
                     .setValue(rule.enabled ?? false)
                     .onChange(async (value) => {
                         const currentRule = this.plugin.settings.rules[index];
@@ -184,7 +185,7 @@ export class RuleSettingTab extends PluginSettingTab {
             setting.addExtraButton(button =>
                 button
                     .setIcon('arrow-up')
-                    .setTooltip('Move rule up')
+                    .setTooltip(SETTINGS_UI.TOOLTIPS.MOVE_UP)
                     .setDisabled(index === 0)
                     .onClick(async () => {
                         if (index === 0) return;
@@ -201,7 +202,7 @@ export class RuleSettingTab extends PluginSettingTab {
             setting.addExtraButton(button =>
                 button
                     .setIcon('arrow-down')
-                    .setTooltip('Move rule down')
+                    .setTooltip(SETTINGS_UI.TOOLTIPS.MOVE_DOWN)
                     .setDisabled(index === this.plugin.settings.rules.length - 1)
                     .onClick(async () => {
                         if (index === this.plugin.settings.rules.length - 1) return;
@@ -224,12 +225,12 @@ export class RuleSettingTab extends PluginSettingTab {
                 if (error) {
                     warningEl.classList.add('vault-organizer-rule-error');
                     warningEl.classList.remove('vault-organizer-rule-warning');
-                    warningEl.textContent = `Invalid regular expression: ${error.message}`;
+                    warningEl.textContent = SETTINGS_UI.WARNINGS.INVALID_REGEX(error.message);
                     warningEl.style.display = '';
                 } else if (ruleRequiresValue && !hasValue) {
                     warningEl.classList.add('vault-organizer-rule-warning');
                     warningEl.classList.remove('vault-organizer-rule-error');
-                    warningEl.textContent = 'Value is required for contains/starts-with/ends-with rules.';
+                    warningEl.textContent = SETTINGS_UI.WARNINGS.VALUE_REQUIRED;
                     warningEl.style.display = '';
                 } else {
                     warningEl.classList.remove('vault-organizer-rule-warning', 'vault-organizer-rule-error');
@@ -242,7 +243,7 @@ export class RuleSettingTab extends PluginSettingTab {
             setting.addText(text => {
                 keyTextComponent = text;
                 text
-                    .setPlaceholder('key')
+                    .setPlaceholder(SETTINGS_UI.PLACEHOLDERS.KEY)
                     .setValue(rule.key)
                     .onChange((value) => {
                         const currentRule = this.plugin.settings.rules[index];
@@ -256,7 +257,7 @@ export class RuleSettingTab extends PluginSettingTab {
             setting.addExtraButton(button =>
                 button
                     .setIcon('list')
-                    .setTooltip('Browse frontmatter keys')
+                    .setTooltip(SETTINGS_UI.TOOLTIPS.BROWSE_FRONTMATTER)
                     .onClick(() => {
                         const keys = this.getFrontmatterKeys();
                         this.openFrontmatterKeyPicker(keys, (key) => {
@@ -273,7 +274,7 @@ export class RuleSettingTab extends PluginSettingTab {
             setting.addText(text => {
                 valueTextComponent = text;
                 text
-                    .setPlaceholder('value')
+                    .setPlaceholder(SETTINGS_UI.PLACEHOLDERS.VALUE)
                     .setValue(rule.value)
                     .onChange((value) => {
                         const currentRule = this.plugin.settings.rules[index];
@@ -288,7 +289,7 @@ export class RuleSettingTab extends PluginSettingTab {
             setting.addExtraButton(button =>
                 button
                     .setIcon('hashtag')
-                    .setTooltip('Browse tags')
+                    .setTooltip(SETTINGS_UI.TOOLTIPS.BROWSE_TAGS)
                     .onClick(() => {
                         const tags = this.getAggregatedTags();
                         this.openTagPicker(tags, (tag) => {
@@ -304,7 +305,7 @@ export class RuleSettingTab extends PluginSettingTab {
                     }));
             setting.addText(text =>
                 text
-                    .setPlaceholder('destination folder (required)')
+                    .setPlaceholder(SETTINGS_UI.PLACEHOLDERS.DESTINATION)
                     .setValue(rule.destination)
                     .onChange((value) => {
                         const currentRule = this.plugin.settings.rules[index];
@@ -358,7 +359,7 @@ export class RuleSettingTab extends PluginSettingTab {
             setting.addText(text => {
                 flagsTextComponent = text;
                 text
-                    .setPlaceholder('flags')
+                    .setPlaceholder(SETTINGS_UI.PLACEHOLDERS.FLAGS)
                     .setValue(rule.flags ?? '')
                     .onChange((value) => {
                         const currentRule = this.plugin.settings.rules[index];
@@ -376,7 +377,7 @@ export class RuleSettingTab extends PluginSettingTab {
             setting.addToggle(toggle => {
                 caseInsensitiveToggleComponent = toggle;
                 toggle
-                    .setTooltip('Case insensitive matching')
+                    .setTooltip(SETTINGS_UI.TOOLTIPS.CASE_INSENSITIVE)
                     .setValue(rule.caseInsensitive ?? false)
                     .onChange(async (value) => {
                         const currentRule = this.plugin.settings.rules[index];
@@ -391,7 +392,7 @@ export class RuleSettingTab extends PluginSettingTab {
 
             setting.addToggle(toggle =>
                 toggle
-                    .setTooltip('Enable debug mode')
+                    .setTooltip(SETTINGS_UI.TOOLTIPS.DEBUG_MODE)
                     .setValue(rule.debug ?? false)
                     .onChange(async (value) => {
                         const currentRule = this.plugin.settings.rules[index];
@@ -404,7 +405,7 @@ export class RuleSettingTab extends PluginSettingTab {
                     }));
             setting.addButton(btn =>
                 btn
-                    .setButtonText('Remove')
+                    .setButtonText(SETTINGS_UI.BUTTONS.REMOVE)
                     .onClick(async () => {
                         this.plugin.settings.rules.splice(index, 1);
                         this.cancelPendingSaveOnly();
@@ -419,7 +420,7 @@ export class RuleSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .addButton(btn =>
                 btn
-                    .setButtonText('Add Rule')
+                    .setButtonText(SETTINGS_UI.BUTTONS.ADD_RULE)
                     .onClick(async () => {
                         this.plugin.settings.rules.push({ key: '', value: '', destination: '', matchType: 'equals', debug: false, enabled: false });
                         this.cancelPendingSaveOnly();
@@ -430,15 +431,15 @@ export class RuleSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .addButton(btn =>
                 btn
-                    .setButtonText('Apply now')
+                    .setButtonText(SETTINGS_UI.BUTTONS.APPLY_NOW)
                     .onClick(async () => {
                         this.cancelPendingSaveOnly();
                         await this.plugin.saveSettingsAndRefreshRules();
                     }))
             .addButton(btn =>
                 btn
-                    .setButtonText('Test All Rules')
-                    .setTooltip('Preview what moves would be made without actually moving files')
+                    .setButtonText(SETTINGS_UI.BUTTONS.TEST_ALL_RULES)
+                    .setTooltip(SETTINGS_UI.TOOLTIPS.TEST_ALL_RULES)
                     .onClick(async () => {
                         this.cancelPendingSaveOnly();
                         await this.plugin.saveSettingsWithoutReorganizing();
@@ -477,12 +478,12 @@ export class RuleSettingTab extends PluginSettingTab {
             if (error) {
                 warningEl.classList.add('vault-organizer-rule-error');
                 warningEl.classList.remove('vault-organizer-rule-warning');
-                warningEl.textContent = `Invalid regular expression: ${error.message}`;
+                warningEl.textContent = SETTINGS_UI.WARNINGS.INVALID_REGEX(error.message);
                 warningEl.style.display = '';
             } else if (ruleRequiresValue && !hasValue) {
                 warningEl.classList.add('vault-organizer-rule-warning');
                 warningEl.classList.remove('vault-organizer-rule-error');
-                warningEl.textContent = 'Value is required for contains/starts-with/ends-with rules.';
+                warningEl.textContent = SETTINGS_UI.WARNINGS.VALUE_REQUIRED;
                 warningEl.style.display = '';
             } else {
                 warningEl.classList.remove('vault-organizer-rule-warning', 'vault-organizer-rule-error');

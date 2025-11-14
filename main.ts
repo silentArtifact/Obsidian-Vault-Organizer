@@ -29,12 +29,14 @@ import {
 } from './src/types';
 import { RuleSettingTab } from './src/ui/settings';
 import { MoveHistoryModal } from './src/ui/modals';
+import { COMMANDS, NOTICES } from './src/constants';
 
 export default class VaultOrganizer extends Plugin {
     settings: VaultOrganizerSettings;
     private rules: FrontmatterRule[] = [];
     private ruleParseErrors: FrontmatterRuleDeserializationError[] = [];
     private ruleSettingTab?: RuleSettingTab;
+    private batchOperationInProgress = false;
 
     /**
      * Called when the plugin is loaded. Initializes settings, registers event handlers,
@@ -53,6 +55,44 @@ export default class VaultOrganizer extends Plugin {
         await this.loadSettings();
         this.updateRulesFromSettings();
 
+        /**
+         * Event Handler Strategy:
+         *
+         * This plugin uses a unified event handling approach to automatically organize files
+         * based on frontmatter rules. The strategy balances responsiveness with performance:
+         *
+         * 1. UNIFIED HANDLER: A single handler function is reused across multiple events
+         *    to maintain consistency and reduce code duplication.
+         *
+         * 2. EVENTS MONITORED:
+         *    - vault.on('create'): Triggered when new files are created
+         *    - vault.on('modify'): Triggered when file content changes
+         *    - vault.on('rename'): Triggered when files are renamed/moved
+         *    - metadataCache.on('changed'): Triggered when frontmatter metadata changes
+         *
+         * 3. WHY MULTIPLE EVENTS:
+         *    - 'create': Ensures newly created files are immediately organized
+         *    - 'modify': Catches frontmatter changes made by direct editing
+         *    - 'rename': Detects manual moves or renames (we still recheck rules)
+         *    - 'changed': Specifically tracks metadata updates, most reliable for frontmatter
+         *
+         * 4. DEDUPLICATION: While multiple events may fire for a single user action,
+         *    applyRulesToFile() includes guards to prevent redundant moves:
+         *    - Checks if destination matches current location
+         *    - Only moves if file is NOT already at the correct location
+         *
+         * 5. PERFORMANCE CONSIDERATIONS:
+         *    - Early return for non-markdown files (line filter)
+         *    - File extension check (extension !== 'md') before processing
+         *    - Metadata existence check before rule matching
+         *    - Debouncing in settings UI prevents excessive saves
+         *
+         * 6. ERROR HANDLING: Each invocation is wrapped in try-catch within
+         *    applyRulesToFile() to prevent one file's error from blocking others
+         *
+         * 7. BATCH MODE: For bulk operations (reorganizeAllMarkdownFiles), we use
+         *    skipSave parameter to defer settings persistence until all files are processed
+         */
         const handleFileChange = async (file: TAbstractFile) => {
             if (!(file instanceof TFile) || file.extension !== 'md') {
                 return;
@@ -74,7 +114,7 @@ export default class VaultOrganizer extends Plugin {
 
         this.addCommand({
             id: 'obsidian-vault-organizer-apply-rules',
-            name: 'Reorganize notes based on frontmatter rules',
+            name: COMMANDS.REORGANIZE.name,
             callback: async () => {
                 await this.reorganizeAllMarkdownFiles();
             },
@@ -82,7 +122,7 @@ export default class VaultOrganizer extends Plugin {
 
         this.addCommand({
             id: 'obsidian-vault-organizer-undo-last-move',
-            name: 'Undo last automatic move',
+            name: COMMANDS.UNDO.name,
             callback: async () => {
                 await this.undoLastMove();
             },
@@ -90,7 +130,7 @@ export default class VaultOrganizer extends Plugin {
 
         this.addCommand({
             id: 'obsidian-vault-organizer-view-history',
-            name: 'View move history',
+            name: COMMANDS.VIEW_HISTORY.name,
             callback: () => {
                 new MoveHistoryModal(this.app, this).open();
             },
@@ -128,10 +168,90 @@ export default class VaultOrganizer extends Plugin {
 
     /**
      * Persists current plugin settings to storage.
+     * When called during a batch operation, saves are deferred until the batch completes.
      */
     async saveSettings() {
         this.settings.rules = this.settings.rules.map(normalizeSerializedRule);
+
+        // Skip save if we're in a batch operation - it will be saved at the end
+        if (this.batchOperationInProgress) {
+            return;
+        }
+
         await this.saveData(this.settings);
+    }
+
+    /**
+     * Batch Operation Pattern for Settings Persistence
+     *
+     * This method provides a formal batch operation pattern to optimize performance
+     * when multiple operations would normally trigger individual settings saves.
+     *
+     * BENEFITS:
+     * - Reduces I/O operations by consolidating multiple saves into one
+     * - Improves performance for bulk operations (e.g., reorganizing 1000+ files)
+     * - Maintains data consistency by ensuring settings are saved even if errors occur
+     * - Simplifies code by abstracting the batch operation logic
+     *
+     * USAGE PATTERN:
+     * ```typescript
+     * await this.withBatchOperation(async () => {
+     *     // Multiple operations that would normally save settings
+     *     await this.applyRulesToFile(file1, true);
+     *     await this.applyRulesToFile(file2, true);
+     *     await this.applyRulesToFile(file3, true);
+     *     // ... hundreds more files
+     * });
+     * // Settings are saved once here, after all operations complete
+     * ```
+     *
+     * IMPLEMENTATION DETAILS:
+     * - Sets batchOperationInProgress flag to defer saveSettings() calls
+     * - Executes the provided operation function
+     * - Guarantees settings save in finally block (even if operation throws)
+     * - Prevents nested batch operations (logs warning if attempted)
+     *
+     * ERROR HANDLING:
+     * - Settings are always saved, even if the batch operation throws an error
+     * - Errors from the operation are re-thrown after settings are saved
+     * - This ensures no data loss while maintaining error propagation
+     *
+     * @param operation - Async function containing the batched operations
+     * @returns Promise resolving to the operation's return value
+     * @throws Re-throws any error from the operation after ensuring settings are saved
+     *
+     * @example
+     * // Reorganize all files with a single settings save
+     * await this.withBatchOperation(async () => {
+     *     for (const file of markdownFiles) {
+     *         await this.applyRulesToFile(file, true);
+     *     }
+     * });
+     *
+     * @example
+     * // Batch multiple rule changes
+     * await this.withBatchOperation(async () => {
+     *     this.settings.rules.push(newRule1);
+     *     this.settings.rules.push(newRule2);
+     *     this.updateRulesFromSettings();
+     * });
+     */
+    async withBatchOperation<T>(operation: () => Promise<T>): Promise<T> {
+        // Prevent nested batch operations
+        if (this.batchOperationInProgress) {
+            console.warn('[Vault Organizer] Nested batch operations are not supported. Using existing batch context.');
+            return await operation();
+        }
+
+        this.batchOperationInProgress = true;
+        try {
+            const result = await operation();
+            return result;
+        } finally {
+            // Always save settings and reset flag, even if operation threw an error
+            this.batchOperationInProgress = false;
+            await this.saveData(this.settings);
+        }
     }
 
     /**
@@ -159,7 +279,7 @@ export default class VaultOrganizer extends Plugin {
         if (errors.length) {
             errors.forEach(error => {
                 const ruleKey = error.rule.key || '(unnamed rule)';
-                const noticeMessage = `Failed to parse regular expression for rule "${ruleKey}": ${error.message}`;
+                const noticeMessage = NOTICES.REGEX_PARSE_ERROR(ruleKey, error.message);
                 new Notice(noticeMessage);
             });
         }
@@ -220,7 +340,7 @@ export default class VaultOrganizer extends Plugin {
 
     async undoLastMove(): Promise<void> {
         if (this.settings.moveHistory.length === 0) {
-            new Notice('No moves to undo.');
+            new Notice(NOTICES.UNDO.NO_MOVES);
             return;
         }
 
@@ -228,7 +348,7 @@ export default class VaultOrganizer extends Plugin {
         const currentFile = this.app.vault.getAbstractFileByPath(lastMove.toPath);
 
         if (!currentFile) {
-            new Notice(`Cannot undo: File no longer exists at ${lastMove.toPath}`);
+            new Notice(NOTICES.UNDO.FILE_NOT_EXISTS(lastMove.toPath));
             // Remove from history since file doesn't exist
             this.settings.moveHistory.shift();
             await this.saveSettings();
@@ -236,7 +356,7 @@ export default class VaultOrganizer extends Plugin {
         }
 
         if (!(currentFile instanceof TFile)) {
-            new Notice(`Cannot undo: ${lastMove.toPath} is not a file.`);
+            new Notice(NOTICES.UNDO.NOT_A_FILE(lastMove.toPath));
             this.settings.moveHistory.shift();
             await this.saveSettings();
             return;
@@ -245,7 +365,7 @@ export default class VaultOrganizer extends Plugin {
         // Check if destination already exists
         const destinationExists = this.app.vault.getAbstractFileByPath(lastMove.fromPath);
         if (destinationExists) {
-            new Notice(`Cannot undo: A file already exists at ${lastMove.fromPath}`);
+            new Notice(NOTICES.UNDO.DESTINATION_EXISTS(lastMove.fromPath));
             // Remove from history to be consistent with missing file case
             this.settings.moveHistory.shift();
             await this.saveSettings();
@@ -267,7 +387,7 @@ export default class VaultOrganizer extends Plugin {
             this.settings.moveHistory.shift();
             await this.saveSettings();
 
-            new Notice(`Undone: Moved ${lastMove.fileName} back to ${lastMove.fromPath}`);
+            new Notice(NOTICES.UNDO.SUCCESS(lastMove.fileName, lastMove.fromPath));
         } catch (err) {
             const categorized = categorizeError(err, lastMove.toPath, 'move', lastMove.fromPath);
             new Notice(categorized.getUserMessage());
@@ -342,7 +462,7 @@ export default class VaultOrganizer extends Plugin {
             if (!trimmedDestination) {
                 if (rule.debug) {
                     const vaultName = this.app.vault.getName();
-                    new Notice(`DEBUG: ${file.basename} would not be moved because destination is empty in ${vaultName}.`);
+                    new Notice(NOTICES.DEBUG.EMPTY_DESTINATION(file.basename, vaultName));
                 }
                 return;
             }
@@ -374,7 +494,7 @@ export default class VaultOrganizer extends Plugin {
 
             if (rule.debug) {
                 const vaultName = this.app.vault.getName();
-                new Notice(`DEBUG: ${file.basename} would be moved to ${vaultName}/${destinationFolder}`);
+                new Notice(NOTICES.DEBUG.WOULD_MOVE(file.basename, vaultName, destinationFolder));
                 return;
             }
 
@@ -404,19 +524,28 @@ export default class VaultOrganizer extends Plugin {
         }
     }
 
+    /**
+     * Reorganizes all markdown files in the vault according to configured rules.
+     * Uses batch operation pattern to optimize performance by deferring settings
+     * persistence until all files have been processed.
+     *
+     * PERFORMANCE: For large vaults (1000+ files), this reduces settings saves
+     * from potentially thousands down to a single save operation.
+     */
     private async reorganizeAllMarkdownFiles(): Promise<void> {
         const markdownFiles = this.app.vault.getMarkdownFiles?.();
         if (!markdownFiles?.length) {
             return;
         }
 
-        // Use batch mode to avoid saving settings on every move
-        for (const file of markdownFiles) {
-            await this.applyRulesToFile(file, true);
-        }
-
-        // Save settings once at the end
-        await this.saveSettings();
+        // Use batch operation pattern to save settings only once at the end
+        await this.withBatchOperation(async () => {
+            for (const file of markdownFiles) {
+                // skipSave parameter is now redundant due to batch operation,
+                // but kept for backward compatibility
+                await this.applyRulesToFile(file, true);
+            }
+        });
     }
 
     /**
