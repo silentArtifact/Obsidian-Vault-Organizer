@@ -98,19 +98,33 @@ With destination `Projects/{project_name}`, the note moves to `Projects/Website 
 
 ### Exclusion Patterns
 
-Prevent automatic file organization for specific files or folders using glob patterns in the **Exclusion Patterns** section of settings.
+Prevent automatic file organization for specific files or folders using glob patterns.
 
-**Examples:**
-- `Templates/**` – exclude everything in Templates folder
-- `*.excalidraw` – exclude all Excalidraw drawings
-- `Archive/**` – exclude archived files
-- `Daily Notes/*` – exclude files directly in Daily Notes (but not subfolders)
+**Note:** Exclusion patterns are fully supported in the backend but currently require manual configuration. To set up exclusion patterns, edit the plugin's `data.json` file and add patterns to the `excludePatterns` array. A UI for managing exclusion patterns will be added in a future update.
+
+**Configuration example (in data.json):**
+```json
+{
+  "excludePatterns": [
+    "Templates/**",
+    "*.excalidraw",
+    "Archive/**",
+    "Daily Notes/*"
+  ]
+}
+```
 
 **Pattern syntax:**
 - `*` – matches any characters except /
 - `**` – matches any characters including / (for recursive matching)
 - `?` – matches a single character
 - `[abc]` – matches any character in the set
+
+**Examples:**
+- `Templates/**` – exclude everything in Templates folder
+- `*.excalidraw` – exclude all Excalidraw drawings
+- `Archive/**` – exclude archived files
+- `Daily Notes/*` – exclude files directly in Daily Notes (but not subfolders)
 
 Files matching any exclusion pattern will not be automatically organized, even if they match a rule.
 

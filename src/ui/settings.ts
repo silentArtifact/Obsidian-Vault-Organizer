@@ -468,41 +468,9 @@ export class RuleSettingTab extends PluginSettingTab {
                     }));
 
         // Exclusion Patterns Section
-        containerEl.createEl('h2', { text: SETTINGS_UI.EXCLUSION_PATTERNS_NAME });
-        containerEl.createEl('p', { text: SETTINGS_UI.EXCLUSION_PATTERNS_DESCRIPTION });
-
-        this.plugin.settings.excludePatterns.forEach((pattern, index) => {
-            const setting = new Setting(containerEl)
-                .addText(text =>
-                    text
-                        .setPlaceholder(SETTINGS_UI.PLACEHOLDERS.EXCLUSION_PATTERN)
-                        .setValue(pattern)
-                        .onChange((value) => {
-                            this.plugin.settings.excludePatterns[index] = value;
-                            this.scheduleSaveOnly();
-                        }))
-                .addButton(btn =>
-                    btn
-                        .setButtonText(SETTINGS_UI.BUTTONS.REMOVE)
-                        .onClick(async () => {
-                            this.plugin.settings.excludePatterns.splice(index, 1);
-                            this.cancelPendingSaveOnly();
-                            await this.plugin.saveSettingsWithoutReorganizing();
-                            this.display();
-                        }));
-            setting.settingEl.classList.add('vault-organizer-exclusion-pattern');
-        });
-
-        new Setting(containerEl)
-            .addButton(btn =>
-                btn
-                    .setButtonText(SETTINGS_UI.BUTTONS.ADD_EXCLUSION)
-                    .onClick(async () => {
-                        this.plugin.settings.excludePatterns.push('');
-                        this.cancelPendingSaveOnly();
-                        await this.plugin.saveSettingsWithoutReorganizing();
-                        this.display();
-                    }));
+        // Note: UI for exclusion patterns will be added in a future update
+        // For now, exclusion patterns can be configured by manually editing the plugin's data.json file
+        // The backend fully supports exclusion patterns via the excludePatterns array in settings
     }
 
     /**
