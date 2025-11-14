@@ -360,14 +360,14 @@ export class RuleSettingTab extends PluginSettingTab {
             // Conflict resolution dropdown
             setting.addDropdown(dropdown => {
                 dropdown.selectEl.setAttribute('aria-label', 'Conflict resolution');
+                dropdown.selectEl.setAttribute('title', SETTINGS_UI.TOOLTIPS.CONFLICT_RESOLUTION);
                 dropdown.addOption('fail', 'Fail');
                 dropdown.addOption('skip', 'Skip');
                 dropdown.addOption('append-number', 'Add number');
                 dropdown.addOption('append-timestamp', 'Add timestamp');
                 dropdown
                     .setValue(rule.conflictResolution ?? 'fail')
-                    .setTooltip(SETTINGS_UI.TOOLTIPS.CONFLICT_RESOLUTION)
-                    .onChange((value) => {
+                    .onChange((value: string) => {
                         const currentRule = this.plugin.settings.rules[index];
                         if (!currentRule) {
                             return;
