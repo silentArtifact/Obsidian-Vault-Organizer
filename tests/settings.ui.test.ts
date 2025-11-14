@@ -284,7 +284,7 @@ describe('settings UI', () => {
     expect((plugin as any).rules).toEqual([{ key: 'tag', matchType: 'equals', value: 'journal', destination: '', debug: false, enabled: false }]);
     expect(reorganizeSpy).not.toHaveBeenCalled();
 
-    const destInput = await screen.findByPlaceholderText('destination folder (required)') as HTMLInputElement;
+    const destInput = await screen.findByPlaceholderText('destination folder (supports {variables})') as HTMLInputElement;
     await fireEvent.input(destInput, { target: { value: 'Journal' } });
     await jest.runOnlyPendingTimersAsync();
     await Promise.resolve();
@@ -543,7 +543,7 @@ describe('settings UI', () => {
     await fireEvent.input(valueInput, { target: { value: 'Active' } });
     await jest.runOnlyPendingTimersAsync();
 
-    const destInput = await screen.findByPlaceholderText('destination folder (required)') as HTMLInputElement;
+    const destInput = await screen.findByPlaceholderText('destination folder (supports {variables})') as HTMLInputElement;
     await fireEvent.input(destInput, { target: { value: 'Projects' } });
     await jest.runOnlyPendingTimersAsync();
     await flushPromises();

@@ -356,6 +356,26 @@ export class RuleSettingTab extends PluginSettingTab {
                         refreshWarning();
                     });
             });
+
+            // Conflict resolution dropdown
+            setting.addDropdown(dropdown => {
+                dropdown.selectEl.setAttribute('aria-label', 'Conflict resolution');
+                dropdown.selectEl.setAttribute('title', SETTINGS_UI.TOOLTIPS.CONFLICT_RESOLUTION);
+                dropdown.addOption('fail', 'Fail');
+                dropdown.addOption('skip', 'Skip');
+                dropdown.addOption('append-number', 'Add number');
+                dropdown.addOption('append-timestamp', 'Add timestamp');
+                dropdown
+                    .setValue(rule.conflictResolution ?? 'fail')
+                    .onChange((value: string) => {
+                        const currentRule = this.plugin.settings.rules[index];
+                        if (!currentRule) {
+                            return;
+                        }
+                        currentRule.conflictResolution = value as 'fail' | 'skip' | 'append-number' | 'append-timestamp';
+                        this.scheduleSaveOnly();
+                    });
+            });
             setting.addText(text => {
                 flagsTextComponent = text;
                 text
@@ -446,6 +466,11 @@ export class RuleSettingTab extends PluginSettingTab {
                         const results = this.plugin.testAllRules();
                         new TestAllRulesModal(this.app, results, this.plugin.settings.rules).open();
                     }));
+
+        // Exclusion Patterns Section
+        // Note: UI for exclusion patterns will be added in a future update
+        // For now, exclusion patterns can be configured by manually editing the plugin's data.json file
+        // The backend fully supports exclusion patterns via the excludePatterns array in settings
     }
 
     /**

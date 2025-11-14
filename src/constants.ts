@@ -40,6 +40,8 @@ export const COMMANDS = {
 export const SETTINGS_UI = {
 	RULE_NAME: 'Frontmatter rule',
 	RULE_DESCRIPTION: 'Move files to destination folder based on frontmatter matching',
+	EXCLUSION_PATTERNS_NAME: 'Exclusion Patterns',
+	EXCLUSION_PATTERNS_DESCRIPTION: 'Files and folders matching these patterns will not be automatically organized',
 
 	TOOLTIPS: {
 		ACTIVATE_RULE: 'Activate this rule',
@@ -49,21 +51,35 @@ export const SETTINGS_UI = {
 		BROWSE_TAGS: 'Browse tags',
 		CASE_INSENSITIVE: 'Case insensitive matching',
 		DEBUG_MODE: 'Enable debug mode',
-		TEST_ALL_RULES: 'Preview what moves would be made without actually moving files'
+		TEST_ALL_RULES: 'Preview what moves would be made without actually moving files',
+		CONFLICT_RESOLUTION: 'How to handle file conflicts at destination',
+		CONDITION_OPERATOR: 'How to combine multiple conditions (AND/OR)',
+		ADD_CONDITION: 'Add another condition to this rule',
+		EXCLUSION_PATTERN: 'Glob pattern (e.g., Templates/**, *.excalidraw)'
 	},
 
 	PLACEHOLDERS: {
 		KEY: 'key',
 		VALUE: 'value',
-		DESTINATION: 'destination folder (required)',
-		FLAGS: 'flags'
+		DESTINATION: 'destination folder (supports {variables})',
+		FLAGS: 'flags',
+		EXCLUSION_PATTERN: 'e.g., Templates/**, Archive/**'
 	},
 
 	BUTTONS: {
 		REMOVE: 'Remove',
 		ADD_RULE: 'Add Rule',
 		APPLY_NOW: 'Apply now',
-		TEST_ALL_RULES: 'Test All Rules'
+		TEST_ALL_RULES: 'Test All Rules',
+		ADD_CONDITION: '+',
+		REMOVE_CONDITION: 'Remove Condition',
+		ADD_EXCLUSION: 'Add Pattern'
+	},
+
+	LABELS: {
+		CONFLICT_RESOLUTION: 'On Conflict:',
+		CONDITION_OPERATOR: 'Combine:',
+		CONDITIONS_SECTION: 'Additional Conditions'
 	},
 
 	WARNINGS: {
