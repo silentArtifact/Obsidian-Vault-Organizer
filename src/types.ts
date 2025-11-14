@@ -18,12 +18,15 @@ export interface VaultOrganizerSettings {
     rules: SerializedFrontmatterRule[];
     moveHistory: MoveHistoryEntry[];
     maxHistorySize: number;
+    /** Glob patterns for files/folders to exclude from automatic processing */
+    excludePatterns: string[];
 }
 
 export const DEFAULT_SETTINGS: VaultOrganizerSettings = {
     rules: [],
     moveHistory: [],
     maxHistorySize: 50,
+    excludePatterns: [],
 };
 
 export type RuleTestResult = {

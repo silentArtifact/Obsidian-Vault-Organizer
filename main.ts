@@ -30,6 +30,8 @@ import {
 import { RuleSettingTab } from './src/ui/settings';
 import { MoveHistoryModal } from './src/ui/modals';
 import { COMMANDS, NOTICES } from './src/constants';
+import { substituteVariables } from './src/variableSubstitution';
+import { isExcluded } from './src/exclusionPatterns';
 
 export default class VaultOrganizer extends Plugin {
     settings: VaultOrganizerSettings;
@@ -163,6 +165,7 @@ export default class VaultOrganizer extends Plugin {
             rules,
             moveHistory: Array.isArray(loaded?.moveHistory) ? loaded.moveHistory : [],
             maxHistorySize: loaded?.maxHistorySize ?? DEFAULT_SETTINGS.maxHistorySize,
+            excludePatterns: Array.isArray(loaded?.excludePatterns) ? loaded.excludePatterns : [],
         };
     }
 
@@ -445,10 +448,42 @@ export default class VaultOrganizer extends Plugin {
         }
     }
 
+    /**
+     * Generates a unique filename when a conflict occurs.
+     *
+     * @param basePath - The base path without extension
+     * @param extension - The file extension
+     * @param strategy - The conflict resolution strategy
+     * @returns A unique file path
+     */
+    private generateUniqueFilename(basePath: string, extension: string, strategy: 'append-number' | 'append-timestamp'): string {
+        if (strategy === 'append-timestamp') {
+            const timestamp = Date.now();
+            return `${basePath}-${timestamp}${extension}`;
+        }
+
+        // append-number strategy
+        let counter = 1;
+        let newPath = `${basePath}-${counter}${extension}`;
+
+        while (this.app.vault.getAbstractFileByPath(newPath)) {
+            counter++;
+            newPath = `${basePath}-${counter}${extension}`;
+        }
+
+        return newPath;
+    }
+
     private async applyRulesToFile(file: TFile, skipSave = false): Promise<void> {
         let intendedDestination: string | undefined;
         try {
-            const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+            // Check if file is excluded
+            if (isExcluded(file.path, this.settings.excludePatterns)) {
+                return;
+            }
+
+            const cache = this.app.metadataCache.getFileCache(file);
+            const frontmatter = cache?.frontmatter;
             if (!frontmatter) {
                 return;
             }
@@ -467,8 +502,17 @@ export default class VaultOrganizer extends Plugin {
                 return;
             }
 
+            // Substitute variables in destination path
+            const substitutionResult = substituteVariables(trimmedDestination, frontmatter);
+            const destinationWithVariables = substitutionResult.substitutedPath;
+
+            // Warn about missing variables in debug mode
+            if (rule.debug && substitutionResult.missing.length > 0) {
+                new Notice(`DEBUG: Missing variables in destination: ${substitutionResult.missing.join(', ')}`);
+            }
+
             // Validate the destination path before attempting to move
-            const destinationValidation = validateDestinationPath(trimmedDestination);
+            const destinationValidation = validateDestinationPath(destinationWithVariables);
             if (!destinationValidation.valid || !destinationValidation.sanitizedPath) {
                 throw destinationValidation.error || new Error('Destination path validation failed');
             }
@@ -485,7 +529,7 @@ export default class VaultOrganizer extends Plugin {
                 throw fullPathValidation.error || new Error('Full path validation failed');
             }
 
-            const newPath = fullPathValidation.sanitizedPath;
+            let newPath = fullPathValidation.sanitizedPath;
             intendedDestination = newPath;
 
             if (file.path === newPath) {
@@ -499,6 +543,29 @@ export default class VaultOrganizer extends Plugin {
             }
 
             await this.ensureFolderExists(destinationFolder);
+
+            // Handle conflict resolution
+            const existingFile = this.app.vault.getAbstractFileByPath(newPath);
+            if (existingFile) {
+                const conflictStrategy = rule.conflictResolution ?? 'fail';
+
+                if (conflictStrategy === 'skip') {
+                    // Silently skip the move
+                    return;
+                } else if (conflictStrategy === 'append-number' || conflictStrategy === 'append-timestamp') {
+                    // Generate a unique filename
+                    const dotIndex = file.name.lastIndexOf('.');
+                    const baseName = dotIndex > 0 ? file.name.substring(0, dotIndex) : file.name;
+                    const extension = dotIndex > 0 ? file.name.substring(dotIndex) : '';
+                    const basePathWithoutExt = `${destinationFolder}/${baseName}`;
+
+                    newPath = this.generateUniqueFilename(basePathWithoutExt, extension, conflictStrategy);
+                    intendedDestination = newPath;
+                } else {
+                    // Default 'fail' - throw an error
+                    throw new FileConflictError(newPath, file.path, 'exists', 'move');
+                }
+            }
 
             const oldPath = file.path;
             try {
@@ -560,7 +627,13 @@ export default class VaultOrganizer extends Plugin {
         const results: RuleTestResult[] = [];
 
         for (const file of markdownFiles) {
-            const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+            // Skip excluded files
+            if (isExcluded(file.path, this.settings.excludePatterns)) {
+                continue;
+            }
+
+            const cache = this.app.metadataCache.getFileCache(file);
+            const frontmatter = cache?.frontmatter;
             if (!frontmatter) {
                 continue;
             }
@@ -582,14 +655,21 @@ export default class VaultOrganizer extends Plugin {
                 continue;
             }
 
-            const destinationValidation = validateDestinationPath(trimmedDestination);
+            // Apply variable substitution
+            const substitutionResult = substituteVariables(trimmedDestination, frontmatter);
+            const destinationWithVariables = substitutionResult.substitutedPath;
+            const substitutionWarnings = substitutionResult.missing.length > 0
+                ? [`Missing variables: ${substitutionResult.missing.join(', ')}`]
+                : [];
+
+            const destinationValidation = validateDestinationPath(destinationWithVariables);
             if (!destinationValidation.valid) {
                 results.push({
                     file,
                     currentPath: file.path,
                     ruleIndex,
                     error: destinationValidation.error,
-                    warnings: destinationValidation.warnings,
+                    warnings: [...substitutionWarnings, ...(destinationValidation.warnings ?? [])],
                 });
                 continue;
             }
@@ -604,6 +684,7 @@ export default class VaultOrganizer extends Plugin {
 
             if (!newPathValidation.valid || !newPathValidation.sanitizedPath) {
                 const warnings = [
+                    ...substitutionWarnings,
                     ...(destinationValidation.warnings ?? []),
                     ...(newPathValidation.warnings ?? []),
                 ];
@@ -620,6 +701,7 @@ export default class VaultOrganizer extends Plugin {
             const sanitizedNewPath = newPathValidation.sanitizedPath;
             if (file.path !== sanitizedNewPath) {
                 const warnings = [
+                    ...substitutionWarnings,
                     ...(destinationValidation.warnings ?? []),
                     ...(newPathValidation.warnings ?? []),
                 ];

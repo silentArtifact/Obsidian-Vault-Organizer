@@ -4,12 +4,18 @@ Vault Organizer is an Obsidian plugin that watches the frontmatter of your Markd
 
 ## Frontmatter rules at a glance
 
-Each rule targets a single frontmatter key and determines what to do when the note contains a matching value:
+Each rule targets frontmatter properties and determines what to do when the note contains matching values:
 
 - **Key** – the name of the frontmatter property to inspect (for example `status`, `tags`, or `type`).
 - **Value** – either a literal string that must match exactly or a regular expression (enable **Regex** to switch modes). Frontmatter arrays are supported; the rule matches if *any* element satisfies the value check.
-- **Destination** – the folder path (relative to the vault root) where matching notes should live. Missing folders are created on demand when the rule runs.
-- **Active** – rules start disabled so you can finish configuring them safely. Flip the toggle to enable a rule once it’s ready to run.
+- **Destination** – the folder path (relative to the vault root) where matching notes should live. **Supports variable substitution** with `{variable}` syntax (e.g., `Projects/{project_name}`) to dynamically create folders based on frontmatter values. Missing folders are created on demand when the rule runs.
+- **Match Type** – choose how to match the value: Equals (exact match), Contains (substring), Starts with, Ends with, or Regex (regular expression).
+- **Conflict Resolution** – what to do when a file already exists at the destination:
+  - **Fail** (default) – show an error and don't move the file
+  - **Skip** – silently skip the move
+  - **Add number** – append -1, -2, etc. to create a unique filename
+  - **Add timestamp** – append a timestamp to create a unique filename
+- **Active** – rules start disabled so you can finish configuring them safely. Flip the toggle to enable a rule once it's ready to run.
 - **Debug** – when enabled the plugin only reports where the note *would* move and leaves it in place, which is useful when testing a new rule.
 
 Rules are evaluated in the order they appear in the settings tab; the first matching rule wins. Notes without matching rules are left untouched.
@@ -64,12 +70,87 @@ Vault Organizer tracks the history of automatic moves to provide a safety net fo
 
 For development, `npm run dev` keeps the build running in watch mode while you edit TypeScript sources.
 
+## Advanced Features
+
+### Variable Substitution
+
+Destinations can include variables from the note's frontmatter using `{variable}` syntax. This allows you to create dynamic folder structures based on note metadata.
+
+**Examples:**
+- `Projects/{project_name}` – organize by project name from frontmatter
+- `Archive/{year}/{month}` – organize by year and month
+- `Team/{department}/{project}` – multi-level organization
+
+**How it works:**
+- Variables are replaced with their frontmatter values when the rule runs
+- Missing variables are replaced with empty strings (folders are cleaned up automatically)
+- Invalid path characters are automatically sanitized
+- Array values are joined with commas
+
+**Example frontmatter and result:**
+```yaml
+---
+project_name: Website Redesign
+year: 2024
+---
+```
+With destination `Projects/{project_name}`, the note moves to `Projects/Website Redesign/`.
+
+### Exclusion Patterns
+
+Prevent automatic file organization for specific files or folders using glob patterns in the **Exclusion Patterns** section of settings.
+
+**Examples:**
+- `Templates/**` – exclude everything in Templates folder
+- `*.excalidraw` – exclude all Excalidraw drawings
+- `Archive/**` – exclude archived files
+- `Daily Notes/*` – exclude files directly in Daily Notes (but not subfolders)
+
+**Pattern syntax:**
+- `*` – matches any characters except /
+- `**` – matches any characters including / (for recursive matching)
+- `?` – matches a single character
+- `[abc]` – matches any character in the set
+
+Files matching any exclusion pattern will not be automatically organized, even if they match a rule.
+
+### Multi-Condition Rules (Advanced)
+
+**Note:** Multi-condition support is available in the rule data structure but requires manual JSON editing of the plugin's data file. A full UI for this feature is planned for a future update.
+
+Rules can have multiple conditions combined with AND or OR logic:
+- **AND** – all conditions must match (more restrictive)
+- **OR** – at least one condition must match (more permissive)
+
+**Example JSON configuration:**
+```json
+{
+  "key": "status",
+  "value": "done",
+  "matchType": "equals",
+  "destination": "Archive/{year}",
+  "enabled": true,
+  "conditionOperator": "AND",
+  "conditions": [
+    {
+      "key": "priority",
+      "value": "low",
+      "matchType": "equals"
+    }
+  ]
+}
+```
+This rule moves notes to Archive only when status is "done" AND priority is "low".
+
 ## Example rule setups
 
 - **Status-based pipeline** – `status = "in-progress"` → `Projects/In Progress`, `status = "done"` → `Projects/Archive`.
+- **Dynamic project folders** – `status = "active"` → `Projects/{project_name}` to organize each project separately.
+- **Date-based archiving** – `status = "done"` → `Archive/{year}/{month}` for chronological organization.
 - **Tag routing** – Regex rule with `key = "tags"`, `value = "^meeting"`, `flags = "i"`, `destination = "Meetings"` to collect all notes whose tags start with `meeting`.
 - **Type folders** – `type = "journal"` → `Journal`, `type = "reference"` → `Reference`.
 - **Area and projects** – Regex on `area` such as `^(home|family)$` → `Areas/Personal`, while a simple rule `area = "work"` → `Areas/Work`.
+- **Conflict handling** – Use "Add number" conflict resolution for daily notes to prevent overwrites: `type = "daily"` → `Daily/{year}` with conflict resolution set to "Add number".
 
 Feel free to stack these rules; only the first rule that matches a note will move it.
 

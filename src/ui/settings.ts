@@ -356,6 +356,26 @@ export class RuleSettingTab extends PluginSettingTab {
                         refreshWarning();
                     });
             });
+
+            // Conflict resolution dropdown
+            setting.addDropdown(dropdown => {
+                dropdown.selectEl.setAttribute('aria-label', 'Conflict resolution');
+                dropdown.addOption('fail', 'Fail');
+                dropdown.addOption('skip', 'Skip');
+                dropdown.addOption('append-number', 'Add number');
+                dropdown.addOption('append-timestamp', 'Add timestamp');
+                dropdown
+                    .setValue(rule.conflictResolution ?? 'fail')
+                    .setTooltip(SETTINGS_UI.TOOLTIPS.CONFLICT_RESOLUTION)
+                    .onChange((value) => {
+                        const currentRule = this.plugin.settings.rules[index];
+                        if (!currentRule) {
+                            return;
+                        }
+                        currentRule.conflictResolution = value as 'fail' | 'skip' | 'append-number' | 'append-timestamp';
+                        this.scheduleSaveOnly();
+                    });
+            });
             setting.addText(text => {
                 flagsTextComponent = text;
                 text
@@ -445,6 +465,43 @@ export class RuleSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettingsWithoutReorganizing();
                         const results = this.plugin.testAllRules();
                         new TestAllRulesModal(this.app, results, this.plugin.settings.rules).open();
+                    }));
+
+        // Exclusion Patterns Section
+        containerEl.createEl('h2', { text: SETTINGS_UI.EXCLUSION_PATTERNS_NAME });
+        containerEl.createEl('p', { text: SETTINGS_UI.EXCLUSION_PATTERNS_DESCRIPTION });
+
+        this.plugin.settings.excludePatterns.forEach((pattern, index) => {
+            const setting = new Setting(containerEl)
+                .addText(text =>
+                    text
+                        .setPlaceholder(SETTINGS_UI.PLACEHOLDERS.EXCLUSION_PATTERN)
+                        .setValue(pattern)
+                        .onChange((value) => {
+                            this.plugin.settings.excludePatterns[index] = value;
+                            this.scheduleSaveOnly();
+                        }))
+                .addButton(btn =>
+                    btn
+                        .setButtonText(SETTINGS_UI.BUTTONS.REMOVE)
+                        .onClick(async () => {
+                            this.plugin.settings.excludePatterns.splice(index, 1);
+                            this.cancelPendingSaveOnly();
+                            await this.plugin.saveSettingsWithoutReorganizing();
+                            this.display();
+                        }));
+            setting.settingEl.classList.add('vault-organizer-exclusion-pattern');
+        });
+
+        new Setting(containerEl)
+            .addButton(btn =>
+                btn
+                    .setButtonText(SETTINGS_UI.BUTTONS.ADD_EXCLUSION)
+                    .onClick(async () => {
+                        this.plugin.settings.excludePatterns.push('');
+                        this.cancelPendingSaveOnly();
+                        await this.plugin.saveSettingsWithoutReorganizing();
+                        this.display();
                     }));
     }
 

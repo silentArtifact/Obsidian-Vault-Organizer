@@ -2,13 +2,44 @@ import { App, TFile } from 'obsidian';
 
 export type FrontmatterMatchType = 'equals' | 'contains' | 'starts-with' | 'ends-with' | 'regex';
 
+export type ConditionOperator = 'AND' | 'OR';
+
+export type ConflictResolution = 'fail' | 'skip' | 'append-number' | 'append-timestamp';
+
+/**
+ * A single condition within a rule.
+ * Multiple conditions can be combined with AND/OR operators.
+ */
+export interface RuleCondition {
+    key: string;
+    matchType: FrontmatterMatchType;
+    value: string | RegExp;
+    caseInsensitive?: boolean;
+}
+
 export interface FrontmatterRule {
+    /** Primary condition (for backward compatibility) */
     key: string;
     matchType: FrontmatterMatchType;
     value: string | RegExp;
     destination: string;
     enabled?: boolean;
     debug?: boolean;
+    caseInsensitive?: boolean;
+    /** Additional conditions (optional) */
+    conditions?: RuleCondition[];
+    /** How to combine conditions (defaults to AND) */
+    conditionOperator?: ConditionOperator;
+    /** How to handle file conflicts at destination */
+    conflictResolution?: ConflictResolution;
+}
+
+export interface SerializedRuleCondition {
+    key: string;
+    matchType?: FrontmatterMatchType;
+    value: string;
+    isRegex?: boolean;
+    flags?: string;
     caseInsensitive?: boolean;
 }
 
@@ -22,6 +53,56 @@ export interface SerializedFrontmatterRule {
     flags?: string;
     debug?: boolean;
     caseInsensitive?: boolean;
+    /** Additional conditions (optional) */
+    conditions?: SerializedRuleCondition[];
+    /** How to combine conditions (defaults to AND) */
+    conditionOperator?: ConditionOperator;
+    /** How to handle file conflicts at destination */
+    conflictResolution?: ConflictResolution;
+}
+
+/**
+ * Tests if a single condition matches the frontmatter.
+ *
+ * @param condition - The condition to test
+ * @param frontmatter - The frontmatter to test against
+ * @returns true if the condition matches, false otherwise
+ */
+function testCondition(condition: RuleCondition, frontmatter: Record<string, unknown>): boolean {
+    const value = frontmatter[condition.key];
+    if (value === undefined || value === null) {
+        return false;
+    }
+
+    const isArrayValue = Array.isArray(value);
+    const values = isArrayValue ? value : [value];
+    const matchType: FrontmatterMatchType = condition.matchType ?? 'equals';
+
+    if (matchType === 'regex') {
+        if (!(condition.value instanceof RegExp)) {
+            return false;
+        }
+        const regex = condition.value;
+        return values.some(item => {
+            const valueStr = String(item);
+            regex.lastIndex = 0;
+            return regex.test(valueStr);
+        });
+    }
+
+    const ruleCandidates = getRuleCandidates(String(condition.value), isArrayValue);
+    const normalizedCandidates =
+        matchType === 'contains' || matchType === 'starts-with' || matchType === 'ends-with'
+            ? ruleCandidates.filter(candidate => candidate.length > 0)
+            : ruleCandidates;
+    if (!normalizedCandidates.length) {
+        return false;
+    }
+
+    return values.some(item => {
+        const valueStr = String(item);
+        return normalizedCandidates.some(candidate => matchByType(valueStr, candidate, matchType, condition.caseInsensitive));
+    });
 }
 
 /**
@@ -29,6 +110,7 @@ export interface SerializedFrontmatterRule {
  * Iterates through rules and tests each against the file's frontmatter properties.
  * Supports multiple match types including equals, contains, starts-with, ends-with, and regex.
  * For array frontmatter values, checks if any element matches the rule criteria.
+ * Supports multi-condition rules with AND/OR operators.
  *
  * @param this - Context object containing the Obsidian app instance for metadata access
  * @param file - The file to check frontmatter for
@@ -50,40 +132,35 @@ export function matchFrontmatter(
         if (rule.enabled === false) {
             return false;
         }
-        const value = cacheFrontmatter[rule.key];
-        if (value === undefined || value === null) {
-            return false;
+
+        // Create primary condition from rule properties
+        const primaryCondition: RuleCondition = {
+            key: rule.key,
+            matchType: rule.matchType,
+            value: rule.value,
+            caseInsensitive: rule.caseInsensitive,
+        };
+
+        // Test primary condition
+        const primaryMatch = testCondition(primaryCondition, cacheFrontmatter);
+
+        // If no additional conditions, return primary match result
+        if (!rule.conditions || rule.conditions.length === 0) {
+            return primaryMatch;
         }
 
-        const isArrayValue = Array.isArray(value);
-        const values = isArrayValue ? value : [value];
-        const matchType: FrontmatterMatchType = rule.matchType ?? 'equals';
+        // Test additional conditions
+        const conditionResults = rule.conditions.map(condition => testCondition(condition, cacheFrontmatter));
 
-        if (matchType === 'regex') {
-            if (!(rule.value instanceof RegExp)) {
-                return false;
-            }
-            const regex = rule.value;
-            return values.some(item => {
-                const valueStr = String(item);
-                regex.lastIndex = 0;
-                return regex.test(valueStr);
-            });
+        // Combine results based on operator
+        const operator = rule.conditionOperator ?? 'AND';
+        if (operator === 'AND') {
+            // All conditions (including primary) must match
+            return primaryMatch && conditionResults.every(result => result);
+        } else {
+            // At least one condition (including primary) must match
+            return primaryMatch || conditionResults.some(result => result);
         }
-
-        const ruleCandidates = getRuleCandidates(String(rule.value), isArrayValue);
-        const normalizedCandidates =
-            matchType === 'contains' || matchType === 'starts-with' || matchType === 'ends-with'
-                ? ruleCandidates.filter(candidate => candidate.length > 0)
-                : ruleCandidates;
-        if (!normalizedCandidates.length) {
-            return false;
-        }
-
-        return values.some(item => {
-            const valueStr = String(item);
-            return normalizedCandidates.some(candidate => matchByType(valueStr, candidate, matchType, rule.caseInsensitive));
-        });
     });
 }
 
@@ -151,9 +228,39 @@ function matchByType(value: string, candidate: string, matchType: FrontmatterMat
 }
 
 /**
+ * Serializes a single condition for storage.
+ *
+ * @param condition - The condition to serialize
+ * @returns Serialized condition
+ */
+function serializeCondition(condition: RuleCondition): SerializedRuleCondition {
+    const matchType: FrontmatterMatchType = condition.matchType ?? 'equals';
+    if (matchType === 'regex') {
+        const pattern = condition.value instanceof RegExp ? condition.value.source : String(condition.value);
+        const flags = condition.value instanceof RegExp ? condition.value.flags : '';
+        return {
+            key: condition.key,
+            matchType,
+            value: pattern,
+            isRegex: true,
+            flags,
+            caseInsensitive: condition.caseInsensitive,
+        };
+    }
+
+    return {
+        key: condition.key,
+        matchType,
+        value: String(condition.value),
+        caseInsensitive: condition.caseInsensitive,
+    };
+}
+
+/**
  * Converts frontmatter rules to a serializable format for storage.
  * Handles RegExp values by extracting their source pattern and flags.
  * Non-regex values are converted to strings.
+ * Serializes multi-condition rules.
  *
  * @param rules - Array of frontmatter rules to serialize
  * @returns Array of serialized rules suitable for JSON storage
@@ -161,31 +268,31 @@ function matchByType(value: string, candidate: string, matchType: FrontmatterMat
 export function serializeFrontmatterRules(rules: FrontmatterRule[]): SerializedFrontmatterRule[] {
     return rules.map(rule => {
         const matchType: FrontmatterMatchType = rule.matchType ?? 'equals';
-        if (matchType === 'regex') {
-            const pattern = rule.value instanceof RegExp ? rule.value.source : String(rule.value);
-            const flags = rule.value instanceof RegExp ? rule.value.flags : '';
-            return {
-                key: rule.key,
-                matchType,
-                value: pattern,
-                destination: rule.destination,
-                enabled: rule.enabled ?? false,
-                isRegex: true,
-                flags,
-                debug: rule.debug,
-                caseInsensitive: rule.caseInsensitive,
-            };
-        }
-
-        return {
+        const serialized: SerializedFrontmatterRule = {
             key: rule.key,
             matchType,
-            value: String(rule.value),
+            value: matchType === 'regex'
+                ? (rule.value instanceof RegExp ? rule.value.source : String(rule.value))
+                : String(rule.value),
             destination: rule.destination,
             enabled: rule.enabled ?? false,
             debug: rule.debug,
             caseInsensitive: rule.caseInsensitive,
+            conditionOperator: rule.conditionOperator,
+            conflictResolution: rule.conflictResolution,
         };
+
+        if (matchType === 'regex') {
+            serialized.isRegex = true;
+            serialized.flags = rule.value instanceof RegExp ? rule.value.flags : '';
+        }
+
+        // Serialize additional conditions
+        if (rule.conditions && rule.conditions.length > 0) {
+            serialized.conditions = rule.conditions.map(serializeCondition);
+        }
+
+        return serialized;
     });
 }
 
@@ -229,9 +336,42 @@ export function hasValidValue(rule: SerializedFrontmatterRule): boolean {
 }
 
 /**
+ * Deserializes a single condition from storage format.
+ *
+ * @param serialized - The serialized condition
+ * @returns Deserialized condition, or undefined if deserialization fails
+ */
+function deserializeCondition(serialized: SerializedRuleCondition): RuleCondition | undefined {
+    const matchType: FrontmatterMatchType = serialized.matchType ?? (serialized.isRegex ? 'regex' : 'equals');
+
+    if (matchType === 'regex') {
+        try {
+            const regex = new RegExp(serialized.value, serialized.flags);
+            return {
+                key: serialized.key,
+                matchType,
+                value: regex,
+                caseInsensitive: serialized.caseInsensitive,
+            };
+        } catch (error) {
+            console.warn(`[Vault Organizer] Failed to deserialize regex condition for key "${serialized.key}":`, error);
+            return undefined;
+        }
+    }
+
+    return {
+        key: serialized.key,
+        matchType,
+        value: serialized.value,
+        caseInsensitive: serialized.caseInsensitive,
+    };
+}
+
+/**
  * Deserializes frontmatter rules from storage format into runtime format.
  * Parses regex patterns and handles deserialization errors gracefully.
  * Failed regex patterns are logged but don't prevent other rules from loading.
+ * Deserializes multi-condition rules.
  *
  * @param data - Array of serialized rules to deserialize (defaults to empty array)
  * @returns Object containing successfully deserialized rules, success details, and any errors encountered
@@ -248,6 +388,19 @@ export function deserializeFrontmatterRules(data: SerializedFrontmatterRule[] = 
 
     data.forEach((rule, index) => {
         const matchType: FrontmatterMatchType = rule.matchType ?? (rule.isRegex ? 'regex' : 'equals');
+
+        // Deserialize additional conditions
+        let conditions: RuleCondition[] | undefined;
+        if (rule.conditions && rule.conditions.length > 0) {
+            const deserializedConditions = rule.conditions
+                .map(deserializeCondition)
+                .filter((c): c is RuleCondition => c !== undefined);
+
+            if (deserializedConditions.length > 0) {
+                conditions = deserializedConditions;
+            }
+        }
+
         if (matchType === 'regex') {
             try {
                 const regex = new RegExp(rule.value, rule.flags);
@@ -259,6 +412,9 @@ export function deserializeFrontmatterRules(data: SerializedFrontmatterRule[] = 
                     enabled: rule.enabled ?? false,
                     debug: rule.debug,
                     caseInsensitive: rule.caseInsensitive,
+                    conditions,
+                    conditionOperator: rule.conditionOperator,
+                    conflictResolution: rule.conflictResolution,
                 };
                 rules.push(parsedRule);
                 successes.push({ index, rule: parsedRule });
@@ -283,6 +439,9 @@ export function deserializeFrontmatterRules(data: SerializedFrontmatterRule[] = 
                 enabled: rule.enabled ?? false,
                 debug: rule.debug,
                 caseInsensitive: rule.caseInsensitive,
+                conditions,
+                conditionOperator: rule.conditionOperator,
+                conflictResolution: rule.conflictResolution,
             };
             rules.push(parsedRule);
             successes.push({ index, rule: parsedRule });
