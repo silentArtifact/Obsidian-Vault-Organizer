@@ -13,6 +13,7 @@ import {
 } from './src/rules';
 import {
     VaultOrganizerError,
+    FileConflictError,
     categorizeError,
 } from './src/errors';
 import {
@@ -260,9 +261,11 @@ export default class VaultOrganizer extends Plugin {
             if (existing) {
                 // Check if it's a file - we can't create a folder with the same name as a file
                 if (existing instanceof TFile) {
-                    throw new VaultOrganizerError(
-                        `Cannot create folder "${currentPath}": a file with this name already exists`,
-                        `A file named "${currentPath}" already exists. Please rename or move the file before creating a folder with this name.`
+                    throw new FileConflictError(
+                        currentPath,
+                        undefined,
+                        'exists',
+                        'create-folder'
                     );
                 }
                 // It's a folder, already exists - continue
