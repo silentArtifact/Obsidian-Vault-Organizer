@@ -197,11 +197,19 @@ export function categorizeError(
 		message.includes('invalid character') ||
 		message.includes('einval')
 	) {
-		return new InvalidPathError(destinationPath || filePath, 'invalid-characters');
+		return new InvalidPathError(
+			destinationPath || filePath,
+			'invalid-characters',
+			err.message
+		);
 	}
 
 	if (message.includes('path too long') || message.includes('enametoolong')) {
-		return new InvalidPathError(destinationPath || filePath, 'too-long');
+		return new InvalidPathError(
+			destinationPath || filePath,
+			'too-long',
+			err.message
+		);
 	}
 
         // Generic file operation error
