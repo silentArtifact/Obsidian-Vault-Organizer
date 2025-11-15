@@ -53,3 +53,24 @@ body.is-phone .vault-organizer-rule-warning {
 .setting-item.vault-organizer-rule-disabled .vault-organizer-rule-warning {
   opacity: 1;
 }
+
+/* Multi-condition styling */
+.vault-organizer-condition {
+  border-left: 2px solid var(--background-modifier-border);
+  margin-left: var(--size-4-4);
+  padding-left: var(--size-4-4);
+  background-color: var(--background-secondary);
+  border-radius: var(--radius-s);
+}
+
+.vault-organizer-condition .setting-item-name {
+  font-size: 0.9em;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* Mobile responsive styling for conditions */
+body.is-phone .vault-organizer-condition {
+  margin-left: var(--size-2-2);
+  padding-left: var(--size-2-2);
+}

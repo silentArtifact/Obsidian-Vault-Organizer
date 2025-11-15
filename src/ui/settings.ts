@@ -376,6 +376,24 @@ export class RuleSettingTab extends PluginSettingTab {
                         this.scheduleSaveOnly();
                     });
             });
+
+            // Condition operator dropdown (AND/OR)
+            setting.addDropdown(dropdown => {
+                dropdown.selectEl.setAttribute('aria-label', 'Condition operator');
+                dropdown.selectEl.setAttribute('title', SETTINGS_UI.TOOLTIPS.CONDITION_OPERATOR);
+                dropdown.addOption('AND', 'AND');
+                dropdown.addOption('OR', 'OR');
+                dropdown
+                    .setValue(rule.conditionOperator ?? 'AND')
+                    .onChange((value: string) => {
+                        const currentRule = this.plugin.settings.rules[index];
+                        if (!currentRule) {
+                            return;
+                        }
+                        currentRule.conditionOperator = value as 'AND' | 'OR';
+                        this.scheduleSaveOnly();
+                    });
+            });
             setting.addText(text => {
                 flagsTextComponent = text;
                 text
@@ -423,6 +441,29 @@ export class RuleSettingTab extends PluginSettingTab {
                         this.cancelPendingSaveOnly();
                         await this.plugin.saveSettingsAndRefreshRules();
                     }));
+            // Add Condition button
+            setting.addButton(btn =>
+                btn
+                    .setButtonText(SETTINGS_UI.BUTTONS.ADD_CONDITION)
+                    .setTooltip(SETTINGS_UI.TOOLTIPS.ADD_CONDITION)
+                    .onClick(async () => {
+                        const currentRule = this.plugin.settings.rules[index];
+                        if (!currentRule) {
+                            return;
+                        }
+                        if (!currentRule.conditions) {
+                            currentRule.conditions = [];
+                        }
+                        currentRule.conditions.push({
+                            key: '',
+                            value: '',
+                            matchType: 'equals'
+                        });
+                        this.cancelPendingSaveOnly();
+                        await this.plugin.saveSettingsWithoutReorganizing();
+                        this.display();
+                    }));
+
             setting.addButton(btn =>
                 btn
                     .setButtonText(SETTINGS_UI.BUTTONS.REMOVE)
@@ -432,6 +473,184 @@ export class RuleSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettingsWithoutReorganizing();
                         this.display();
                     }));
+
+            // Additional Conditions Section
+            if (rule.conditions && rule.conditions.length > 0) {
+                rule.conditions.forEach((condition, conditionIndex) => {
+                    const conditionSetting = new Setting(containerEl)
+                        .setName(`${SETTINGS_UI.LABELS.CONDITIONS_SECTION} ${conditionIndex + 1}`)
+                        .setClass('vault-organizer-condition');
+
+                    // Condition key input
+                    let conditionKeyComponent: TextComponent | undefined;
+                    conditionSetting.addText(text => {
+                        conditionKeyComponent = text;
+                        text
+                            .setPlaceholder(SETTINGS_UI.PLACEHOLDERS.KEY)
+                            .setValue(condition.key)
+                            .onChange((value) => {
+                                const currentRule = this.plugin.settings.rules[index];
+                                if (!currentRule?.conditions?.[conditionIndex]) {
+                                    return;
+                                }
+                                currentRule.conditions[conditionIndex].key = value;
+                                this.scheduleSaveOnly();
+                            });
+                    });
+
+                    // Browse frontmatter keys button
+                    conditionSetting.addExtraButton(button =>
+                        button
+                            .setIcon('list')
+                            .setTooltip(SETTINGS_UI.TOOLTIPS.BROWSE_FRONTMATTER)
+                            .onClick(() => {
+                                const keys = this.getFrontmatterKeys();
+                                this.openFrontmatterKeyPicker(keys, (key) => {
+                                    const currentRule = this.plugin.settings.rules[index];
+                                    if (!currentRule?.conditions?.[conditionIndex] || !conditionKeyComponent) {
+                                        return;
+                                    }
+                                    conditionKeyComponent.setValue(key);
+                                    currentRule.conditions[conditionIndex].key = key;
+                                    this.scheduleSaveOnly();
+                                });
+                            }));
+
+                    // Condition value input
+                    let conditionValueComponent: TextComponent | undefined;
+                    conditionSetting.addText(text => {
+                        conditionValueComponent = text;
+                        text
+                            .setPlaceholder(SETTINGS_UI.PLACEHOLDERS.VALUE)
+                            .setValue(condition.value)
+                            .onChange((value) => {
+                                const currentRule = this.plugin.settings.rules[index];
+                                if (!currentRule?.conditions?.[conditionIndex]) {
+                                    return;
+                                }
+                                currentRule.conditions[conditionIndex].value = value;
+                                this.scheduleSaveOnly();
+                            });
+                    });
+
+                    // Browse tags button
+                    conditionSetting.addExtraButton(button =>
+                        button
+                            .setIcon('hashtag')
+                            .setTooltip(SETTINGS_UI.TOOLTIPS.BROWSE_TAGS)
+                            .onClick(() => {
+                                const tags = this.getAggregatedTags();
+                                this.openTagPicker(tags, (tag) => {
+                                    const currentRule = this.plugin.settings.rules[index];
+                                    if (!currentRule?.conditions?.[conditionIndex] || !conditionValueComponent) {
+                                        return;
+                                    }
+                                    const nextValue = this.toggleTagValue(conditionValueComponent.getValue(), tag);
+                                    conditionValueComponent.setValue(nextValue);
+                                    currentRule.conditions[conditionIndex].value = nextValue;
+                                    this.scheduleSaveOnly();
+                                });
+                            }));
+
+                    // Match type dropdown for condition
+                    const currentConditionMatchType: FrontmatterMatchType = condition.matchType ?? 'equals';
+                    let conditionFlagsComponent: TextComponent | undefined;
+                    let conditionCaseInsensitiveComponent: ToggleComponent | undefined;
+
+                    const updateConditionRegexControlsVisibility = () => {
+                        const currentRule = this.plugin.settings.rules[index];
+                        const currentCondition = currentRule?.conditions?.[conditionIndex];
+                        const isRegex = (currentCondition?.matchType ?? 'equals') === 'regex';
+                        if (conditionFlagsComponent) {
+                            conditionFlagsComponent.inputEl.toggleAttribute('disabled', !isRegex);
+                            conditionFlagsComponent.inputEl.disabled = !isRegex;
+                            conditionFlagsComponent.inputEl.style.display = isRegex ? '' : 'none';
+                        }
+                        if (conditionCaseInsensitiveComponent) {
+                            conditionCaseInsensitiveComponent.toggleEl.style.display = isRegex ? 'none' : '';
+                        }
+                    };
+
+                    conditionSetting.addDropdown(dropdown => {
+                        dropdown.selectEl.setAttribute('aria-label', 'Match type');
+                        MATCH_TYPE_OPTIONS.forEach(option => dropdown.addOption(option.value, option.label));
+                        dropdown
+                            .setValue(currentConditionMatchType)
+                            .onChange(async (value) => {
+                                const currentRule = this.plugin.settings.rules[index];
+                                if (!currentRule?.conditions?.[conditionIndex]) {
+                                    return;
+                                }
+                                currentRule.conditions[conditionIndex].matchType = value as FrontmatterMatchType;
+                                if (value === 'regex') {
+                                    currentRule.conditions[conditionIndex].isRegex = true;
+                                    currentRule.conditions[conditionIndex].flags = currentRule.conditions[conditionIndex].flags ?? '';
+                                } else {
+                                    delete currentRule.conditions[conditionIndex].isRegex;
+                                    if ('flags' in currentRule.conditions[conditionIndex]) {
+                                        delete currentRule.conditions[conditionIndex].flags;
+                                    }
+                                }
+                                updateConditionRegexControlsVisibility();
+                                this.cancelPendingSaveOnly();
+                                await this.plugin.saveSettingsAndRefreshRules();
+                                updateConditionRegexControlsVisibility();
+                            });
+                    });
+
+                    // Regex flags input for condition
+                    conditionSetting.addText(text => {
+                        conditionFlagsComponent = text;
+                        text
+                            .setPlaceholder(SETTINGS_UI.PLACEHOLDERS.FLAGS)
+                            .setValue(condition.flags ?? '')
+                            .onChange((value) => {
+                                const currentRule = this.plugin.settings.rules[index];
+                                if (!currentRule?.conditions?.[conditionIndex]) {
+                                    return;
+                                }
+                                if (currentRule.conditions[conditionIndex].matchType === 'regex') {
+                                    currentRule.conditions[conditionIndex].flags = value;
+                                    this.scheduleSaveOnly();
+                                }
+                            });
+                    });
+
+                    // Case insensitive toggle for condition
+                    conditionSetting.addToggle(toggle => {
+                        conditionCaseInsensitiveComponent = toggle;
+                        toggle
+                            .setTooltip(SETTINGS_UI.TOOLTIPS.CASE_INSENSITIVE)
+                            .setValue(condition.caseInsensitive ?? false)
+                            .onChange(async (value) => {
+                                const currentRule = this.plugin.settings.rules[index];
+                                if (!currentRule?.conditions?.[conditionIndex]) {
+                                    return;
+                                }
+                                currentRule.conditions[conditionIndex].caseInsensitive = value;
+                                this.cancelPendingSaveOnly();
+                                await this.plugin.saveSettingsAndRefreshRules();
+                            });
+                    });
+
+                    // Remove condition button
+                    conditionSetting.addButton(btn =>
+                        btn
+                            .setButtonText(SETTINGS_UI.BUTTONS.REMOVE_CONDITION)
+                            .onClick(async () => {
+                                const currentRule = this.plugin.settings.rules[index];
+                                if (!currentRule?.conditions) {
+                                    return;
+                                }
+                                currentRule.conditions.splice(conditionIndex, 1);
+                                this.cancelPendingSaveOnly();
+                                await this.plugin.saveSettingsWithoutReorganizing();
+                                this.display();
+                            }));
+
+                    updateConditionRegexControlsVisibility();
+                });
+            }
 
             refreshWarning();
             updateEnabledState();
