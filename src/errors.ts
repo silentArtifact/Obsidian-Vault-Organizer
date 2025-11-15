@@ -63,7 +63,7 @@ export class PermissionError extends VaultOrganizerError {
 
 /**
  * Error thrown when a file operation fails due to a conflict.
- * Covers cases like existing files, locked files, or files currently in use.
+ * Covers cases like existing files, locked files, files currently in use, or excessive conflicts.
  */
 export class FileConflictError extends VaultOrganizerError {
         /**
@@ -71,16 +71,16 @@ export class FileConflictError extends VaultOrganizerError {
          *
          * @param sourcePath - The path to the source file being operated on
          * @param destinationPath - The destination path if applicable (e.g., for move operations)
-         * @param conflictType - The type of conflict: 'exists' (file already exists), 'locked' (file is locked), or 'in-use' (file is being used)
+         * @param conflictType - The type of conflict: 'exists' (file already exists), 'locked' (file is locked), 'in-use' (file is being used), or 'too-many-conflicts' (conflict resolution exceeded max attempts)
          * @param operation - The operation that was attempted (e.g., 'move', 'copy', 'create')
          * @param originalError - The original error that triggered this conflict error, if any
          */
         constructor(
                 public readonly sourcePath: string,
                 public readonly destinationPath: string | undefined,
-                public readonly conflictType: 'exists' | 'locked' | 'in-use',
+                public readonly conflictType: 'exists' | 'locked' | 'in-use' | 'too-many-conflicts',
                 public readonly operation: string,
-                public readonly originalError?: Error
+                public readonly originalError?: Error | string
         ) {
                 const friendlyOperation = formatOperationForMessage(operation);
                 const baseMessage = destinationPath
@@ -100,6 +100,9 @@ export class FileConflictError extends VaultOrganizerError {
                         exists: 'a file already exists at that location',
                         locked: 'the destination file is locked',
                         'in-use': 'the destination file is currently in use',
+                        'too-many-conflicts': typeof this.originalError === 'string'
+                                ? this.originalError
+                                : 'too many filename conflicts encountered',
                 };
                 const friendlyOperation = formatOperationForMessage(this.operation);
                 const baseMessage = this.destinationPath
