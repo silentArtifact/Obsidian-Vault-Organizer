@@ -282,6 +282,8 @@ export class MoveHistoryModal extends Modal {
             });
 
             const historyContainer = contentEl.createDiv({ cls: 'vault-organizer-history-container' });
+            // Max height to keep modal manageable while showing ~8-10 history entries
+            // Allows scrolling for larger histories without overwhelming the UI
             historyContainer.style.maxHeight = '500px';
             historyContainer.style.overflowY = 'auto';
             historyContainer.style.marginTop = '1em';

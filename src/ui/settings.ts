@@ -18,6 +18,34 @@ const SETTINGS_SAVE_DEBOUNCE_MS = 300;
  */
 const METADATA_REFRESH_DEBOUNCE_MS = 1000;
 
+/**
+ * Validates regex flags to ensure they are all valid and not duplicated.
+ * Valid flags: g (global), i (ignore case), m (multiline), s (dotAll), u (unicode), y (sticky)
+ *
+ * @param flags - The flags string to validate
+ * @returns Object with valid boolean and optional error message
+ */
+function validateRegexFlags(flags: string): { valid: boolean; error?: string } {
+    if (!flags || flags.trim() === '') {
+        return { valid: true };
+    }
+
+    const validFlags = new Set(['g', 'i', 'm', 's', 'u', 'y']);
+    const seenFlags = new Set<string>();
+
+    for (const char of flags) {
+        if (!validFlags.has(char)) {
+            return { valid: false, error: `Invalid flag '${char}'. Valid flags: g, i, m, s, u, y` };
+        }
+        if (seenFlags.has(char)) {
+            return { valid: false, error: `Duplicate flag '${char}'` };
+        }
+        seenFlags.add(char);
+    }
+
+    return { valid: true };
+}
+
 export class RuleSettingTab extends PluginSettingTab {
     plugin: VaultOrganizer;
     private debouncedSaveOnly: ReturnType<typeof debounce>;
@@ -345,9 +373,7 @@ export class RuleSettingTab extends PluginSettingTab {
                             currentRule.flags = currentRule.flags ?? '';
                         } else {
                             delete currentRule.isRegex;
-                            if ('flags' in currentRule) {
-                                delete currentRule.flags;
-                            }
+                            delete currentRule.flags;
                         }
                         updateRegexControlsVisibility();
                         this.cancelPendingSaveOnly();
@@ -405,6 +431,18 @@ export class RuleSettingTab extends PluginSettingTab {
                             return;
                         }
                         if (currentRule.matchType === 'regex') {
+                            // Validate regex flags in real-time
+                            const validation = validateRegexFlags(value);
+                            if (!validation.valid) {
+                                // Show error styling on the input
+                                text.inputEl.classList.add('vault-organizer-invalid-input');
+                                text.inputEl.title = validation.error || 'Invalid regex flags';
+                            } else {
+                                // Remove error styling
+                                text.inputEl.classList.remove('vault-organizer-invalid-input');
+                                text.inputEl.title = '';
+                            }
+
                             currentRule.flags = value;
                             this.scheduleSaveOnly();
                         }
@@ -587,9 +625,7 @@ export class RuleSettingTab extends PluginSettingTab {
                                     currentRule.conditions[conditionIndex].flags = currentRule.conditions[conditionIndex].flags ?? '';
                                 } else {
                                     delete currentRule.conditions[conditionIndex].isRegex;
-                                    if ('flags' in currentRule.conditions[conditionIndex]) {
-                                        delete currentRule.conditions[conditionIndex].flags;
-                                    }
+                                    delete currentRule.conditions[conditionIndex].flags;
                                 }
                                 updateConditionRegexControlsVisibility();
                                 this.cancelPendingSaveOnly();
@@ -610,6 +646,18 @@ export class RuleSettingTab extends PluginSettingTab {
                                     return;
                                 }
                                 if (currentRule.conditions[conditionIndex].matchType === 'regex') {
+                                    // Validate regex flags in real-time
+                                    const validation = validateRegexFlags(value);
+                                    if (!validation.valid) {
+                                        // Show error styling on the input
+                                        text.inputEl.classList.add('vault-organizer-invalid-input');
+                                        text.inputEl.title = validation.error || 'Invalid regex flags';
+                                    } else {
+                                        // Remove error styling
+                                        text.inputEl.classList.remove('vault-organizer-invalid-input');
+                                        text.inputEl.title = '';
+                                    }
+
                                     currentRule.conditions[conditionIndex].flags = value;
                                     this.scheduleSaveOnly();
                                 }

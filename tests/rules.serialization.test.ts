@@ -50,7 +50,7 @@ describe('Frontmatter rule serialization', () => {
   });
 
   it('ignores malformed regex data during deserialization', () => {
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     try {
       const malformed: SerializedFrontmatterRule[] = [
         { key: 'tag', value: '\\', destination: 'Journal', isRegex: true }
@@ -60,9 +60,9 @@ describe('Frontmatter rule serialization', () => {
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0].rule).toEqual({ ...malformed[0], matchType: 'regex' });
       expect(result.errors[0].message).toBeDefined();
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to deserialize regex'));
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to deserialize regex'));
     } finally {
-      warnSpy.mockRestore();
+      errorSpy.mockRestore();
     }
   });
 

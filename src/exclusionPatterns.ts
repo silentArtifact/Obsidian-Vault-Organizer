@@ -65,12 +65,24 @@ function globToRegex(pattern: string): RegExp {
 /**
  * Checks if a file path matches any of the exclusion patterns.
  *
+ * IMPORTANT BEHAVIOR: Folder patterns automatically exclude all subdirectories.
+ * For example, "Templates" will exclude both "Templates/file.md" AND "Templates/subfolder/file.md".
+ * This is intentional for convenience - you don't need to use "Templates/**" for recursive exclusion.
+ *
+ * Pattern Behavior:
+ * - "Templates"     → Excludes Templates folder and ALL subdirectories (recursive)
+ * - "Templates/*"   → Same as above (glob pattern is also applied)
+ * - "Templates/**"  → Explicitly recursive (same result as "Templates")
+ * - "*.tmp"         → Excludes all .tmp files in any directory
+ *
  * @param filePath - The file path to check (relative to vault root)
  * @param patterns - Array of glob patterns
  * @returns true if the file should be excluded, false otherwise
  *
  * @example
- * isExcluded("Templates/daily.md", ["Templates/**"]) // true
+ * isExcluded("Templates/daily.md", ["Templates"]) // true - folder pattern matches recursively
+ * isExcluded("Templates/subfolder/note.md", ["Templates"]) // true - recursive by default
+ * isExcluded("Templates/daily.md", ["Templates/**"]) // true - explicit recursive pattern
  * isExcluded("Notes/meeting.md", ["Templates/**"]) // false
  * isExcluded("Archive/old.md", ["Archive/*", "Trash/*"]) // true
  */
@@ -94,8 +106,9 @@ export function isExcluded(filePath: string, patterns: string[]): boolean {
             return true;
         }
 
-        // Also check if the file is inside an excluded folder
-        // e.g., "Templates" should exclude "Templates/subfolder/file.md"
+        // Automatic recursive exclusion: folder patterns exclude ALL subdirectories
+        // This ensures "Templates" excludes "Templates/subfolder/file.md" without requiring "Templates/**"
+        // Provides convenience while maintaining predictable behavior
         const folderPattern = normalizedPattern.replace(/\/$/, '');
         if (normalizedPath.startsWith(folderPattern + '/')) {
             return true;

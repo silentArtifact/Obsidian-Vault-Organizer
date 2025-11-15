@@ -77,7 +77,7 @@ function sanitizePathValue(value: unknown): string {
  * Missing variables are replaced with empty strings, which may result in
  * consecutive slashes that are automatically cleaned up.
  *
- * Array values are joined with commas.
+ * Array values are joined with hyphens for readability (e.g., ['tag1', 'tag2'] becomes 'tag1-tag2').
  * Date values are formatted as ISO date strings.
  *
  * @param template - Destination path template (e.g., "Projects/{project}/{status}")
@@ -89,6 +89,10 @@ function sanitizePathValue(value: unknown): string {
  * // result.substitutedPath === "Projects/Website"
  * // result.substituted === ["project"]
  * // result.missing === []
+ *
+ * @example
+ * const result = substituteVariables("Work/{tags}", {tags: ["urgent", "project"]});
+ * // result.substitutedPath === "Work/urgent-project"
  */
 export function substituteVariables(
     template: string,
@@ -120,9 +124,10 @@ export function substituteVariables(
             substituted.push(variable);
             let sanitizedValue: string;
 
-            // Handle array values
+            // Handle array values - join with hyphens for better readability
+            // e.g., ['urgent', 'project'] becomes 'urgent-project' instead of 'urgent,project'
             if (Array.isArray(value)) {
-                sanitizedValue = value.map(v => sanitizePathValue(v)).filter(Boolean).join(',');
+                sanitizedValue = value.map(v => sanitizePathValue(v)).filter(Boolean).join('-');
             } else {
                 sanitizedValue = sanitizePathValue(value);
             }
