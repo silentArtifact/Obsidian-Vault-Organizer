@@ -1,4 +1,5 @@
 import { App, TFile } from 'obsidian';
+import { Logger } from './logger';
 
 export type FrontmatterMatchType = 'equals' | 'contains' | 'starts-with' | 'ends-with' | 'regex';
 
@@ -83,8 +84,11 @@ function testCondition(condition: RuleCondition, frontmatter: Record<string, unk
             return false;
         }
         const regex = condition.value;
+        // Reset lastIndex before testing to prevent state issues with global flags
+        regex.lastIndex = 0;
         return values.some(item => {
             const valueStr = String(item);
+            // Reset again for each test to ensure clean state
             regex.lastIndex = 0;
             return regex.test(valueStr);
         });
@@ -170,14 +174,26 @@ export function matchFrontmatter(
  * into individual tokens plus the full trimmed string, enabling flexible matching.
  * For non-array values, returns the original value as-is.
  *
+ * **Why this is needed:**
+ * Obsidian frontmatter can contain array values like `tags: [work, urgent]`. When users
+ * create rules to match these arrays, they might want to match individual items ("work")
+ * or the combination ("work urgent"). This function creates all possible match candidates.
+ *
+ * **Deduplication:**
+ * Uses a Set internally to prevent duplicate candidates, which could occur if the input
+ * has repeated tokens or if trimming creates duplicates.
+ *
  * @param value - The rule value to process
  * @param shouldExpand - Whether to expand the value into multiple candidates (true for array frontmatter)
- * @returns Array of candidate strings to match against
+ * @returns Array of unique candidate strings to match against
  * @example
  * // For array matching: "foo bar" -> ["foo bar", "foo", "bar"]
  * getRuleCandidates("foo bar", true)
  * // For single value matching: "foo bar" -> ["foo bar"]
  * getRuleCandidates("foo bar", false)
+ * @example
+ * // Deduplication in action
+ * getRuleCandidates("work work urgent", true) // -> ["work work urgent", "work", "urgent"]
  */
 function getRuleCandidates(value: string, shouldExpand: boolean): string[] {
     if (!shouldExpand) {
@@ -354,7 +370,7 @@ function deserializeCondition(serialized: SerializedRuleCondition): RuleConditio
                 caseInsensitive: serialized.caseInsensitive,
             };
         } catch (error) {
-            console.warn(`[Vault Organizer] Failed to deserialize regex condition for key "${serialized.key}":`, error);
+            Logger.warn(`Failed to deserialize regex condition for key "${serialized.key}"`, error);
             return undefined;
         }
     }
@@ -421,8 +437,10 @@ export function deserializeFrontmatterRules(data: SerializedFrontmatterRule[] = 
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 const destinationInfo = rule.destination ? ` (destination: "${rule.destination}")` : '';
-                const warningMessage = `[Obsidian Vault Organizer] Failed to deserialize regex for frontmatter rule "${rule.key}"${destinationInfo}: ${message}. Rule will be ignored.`;
-                console.warn(warningMessage);
+                Logger.warn(
+                    `Failed to deserialize regex for frontmatter rule "${rule.key}"${destinationInfo}: ${message}. Rule will be ignored.`,
+                    error
+                );
                 errors.push({
                     index,
                     message,

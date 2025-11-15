@@ -1,20 +1,31 @@
 /**
  * Path sanitization and validation utilities for cross-platform compatibility.
  * Ensures paths are safe and compatible with Windows, macOS, and Linux filesystems.
+ *
+ * **Validation Boundaries:**
+ *
+ * - **Public API Functions** (validatePath, validateDestinationPath, sanitizePath, isValidPath):
+ *   These functions ALWAYS validate their inputs and return validation results or throw errors.
+ *   They are safe to call with untrusted user input.
+ *
+ * - **Internal Helper Functions** (safeJoinPath with pre-validated segments):
+ *   These may assume certain invariants are already met. Check function documentation.
+ *
+ * - **Obsidian's normalizePath**:
+ *   Called internally after our validation to ensure Obsidian-compatible formatting.
+ *
+ * **Validation Rules:**
+ * - No path traversal (../)
+ * - No absolute paths (unless explicitly allowed)
+ * - No invalid characters for Windows compatibility
+ * - Respects maximum path lengths
+ * - Checks for Windows reserved names (CON, PRN, etc.)
+ * - No trailing dots or spaces in path components
  */
 
 import { normalizePath } from 'obsidian';
 import { InvalidPathError } from './errors';
-
-/**
- * Maximum path length for different operating systems.
- * Using conservative limits for cross-platform compatibility.
- */
-const MAX_PATH_LENGTH = {
-	windows: 260, // MAX_PATH on Windows
-	unix: 4096, // PATH_MAX on most Unix systems
-	component: 255, // Max filename length on most filesystems
-};
+import { PATH_LIMITS } from './config';
 
 /**
  * Reserved filenames on Windows that cannot be used.
@@ -131,7 +142,7 @@ export function validatePath(
 	const {
 		allowEmpty = false,
 		allowAbsolute = false,
-		maxLength = MAX_PATH_LENGTH.windows,
+		maxLength = PATH_LIMITS.WINDOWS_MAX_PATH,
 		checkReservedNames = true,
 	} = options;
 
@@ -215,13 +226,13 @@ export function validatePath(
 	const components = sanitized.split('/').filter(Boolean);
 	for (const component of components) {
 		// Check component length
-		if (component.length > MAX_PATH_LENGTH.component) {
+		if (component.length > PATH_LIMITS.MAX_COMPONENT_LENGTH) {
 			return {
 				valid: false,
 				error: new InvalidPathError(
 					path,
 					'too-long',
-					`Path component "${component}" exceeds ${MAX_PATH_LENGTH.component} characters`
+					`Path component "${component}" exceeds ${PATH_LIMITS.MAX_COMPONENT_LENGTH} characters`
 				),
 			};
 		}

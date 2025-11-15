@@ -11,7 +11,13 @@
     "importHelpers": true,
     "isolatedModules": true,
     "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
     "esModuleInterop": true,
+    "skipLibCheck": true,
     "lib": [
       "DOM",
       "ES5",
