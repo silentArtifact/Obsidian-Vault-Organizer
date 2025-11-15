@@ -709,7 +709,7 @@ export default class VaultOrganizer extends Plugin {
                     file,
                     currentPath: file.path,
                     ruleIndex,
-                    error: destinationValidation.error,
+                    error: destinationValidation.error ?? new InvalidPathError(destinationWithVariables, 'invalid-characters', 'Unknown validation error'),
                     warnings: [...substitutionWarnings, ...(destinationValidation.warnings ?? [])],
                 });
                 continue;
@@ -733,7 +733,7 @@ export default class VaultOrganizer extends Plugin {
                     file,
                     currentPath: file.path,
                     ruleIndex,
-                    error: newPathValidation.error,
+                    error: newPathValidation.error ?? new InvalidPathError(combinedPath, 'invalid-characters', 'Unknown validation error'),
                     warnings: warnings.length ? warnings : undefined,
                 });
                 continue;

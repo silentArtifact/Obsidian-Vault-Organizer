@@ -71,14 +71,14 @@ export class FileConflictError extends VaultOrganizerError {
          *
          * @param sourcePath - The path to the source file being operated on
          * @param destinationPath - The destination path if applicable (e.g., for move operations)
-         * @param conflictType - The type of conflict: 'exists' (file already exists), 'locked' (file is locked), or 'in-use' (file is being used)
+         * @param conflictType - The type of conflict: 'exists' (file already exists), 'locked' (file is locked), 'in-use' (file is being used), or 'max-attempts' (exceeded retry limit)
          * @param operation - The operation that was attempted (e.g., 'move', 'copy', 'create')
          * @param originalError - The original error that triggered this conflict error, if any
          */
         constructor(
                 public readonly sourcePath: string,
                 public readonly destinationPath: string | undefined,
-                public readonly conflictType: 'exists' | 'locked' | 'in-use',
+                public readonly conflictType: 'exists' | 'locked' | 'in-use' | 'max-attempts',
                 public readonly operation: string,
                 public readonly originalError?: Error
         ) {
@@ -100,6 +100,7 @@ export class FileConflictError extends VaultOrganizerError {
                         exists: 'a file already exists at that location',
                         locked: 'the destination file is locked',
                         'in-use': 'the destination file is currently in use',
+                        'max-attempts': 'exceeded maximum attempts to find a unique filename',
                 };
                 const friendlyOperation = formatOperationForMessage(this.operation);
                 const baseMessage = this.destinationPath
