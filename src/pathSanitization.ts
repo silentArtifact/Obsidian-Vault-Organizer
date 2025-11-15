@@ -276,7 +276,7 @@ export function sanitizePath(
 ): string {
 	const result = validatePath(path, options);
 	if (!result.valid || !result.sanitizedPath) {
-		throw result.error || new Error('Path validation failed');
+		throw result.error || new InvalidPathError(path, 'invalid-characters', 'Path validation failed');
 	}
 	return result.sanitizedPath;
 }

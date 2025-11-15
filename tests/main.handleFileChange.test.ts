@@ -127,20 +127,20 @@ describe('handleFileChange', () => {
     const file = createMockFile('Temp/Test.md');
     const renameError = new Error('rename failed');
     renameFile.mockRejectedValueOnce(renameError);
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    // Expected errors are now logged at warn level
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     await handle(file);
 
     expect(renameFile).toHaveBeenCalledWith(file, 'Journal/Test.md');
     // Updated to match new error categorization format
     expect(Notice).toHaveBeenCalledWith('Failed to move "Temp/Test.md": rename failed.');
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
       expect.stringContaining('[Vault Organizer]'),
-      expect.anything(),
       expect.anything()
     );
 
-    consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
   });
 
   it('shows a create-folder failure notice when folder creation fails', async () => {
@@ -151,7 +151,8 @@ describe('handleFileChange', () => {
     createFolder.mockImplementationOnce(async () => {
       throw folderError;
     });
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    // Expected errors are now logged at warn level
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     await handle(file);
 
@@ -160,13 +161,12 @@ describe('handleFileChange', () => {
     expect(Notice).toHaveBeenCalledWith(
       'Permission denied: Cannot create folder "Journal". Check file permissions and try again.'
     );
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
       expect.stringContaining('[Vault Organizer]'),
-      expect.stringContaining('Permission denied'),
-      expect.objectContaining({ originalError: folderError })
+      expect.stringContaining('Permission denied')
     );
 
-    consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
   });
 
   it('applies rules to existing files via command', async () => {

@@ -134,14 +134,16 @@ describe('substituteVariables', () => {
         const result = substituteVariables('Projects/{tags}', {
             tags: ['work', 'urgent', 'client'],
         });
-        expect(result.substitutedPath).toBe('Projects/work,urgent,client');
+        // Arrays are now joined with '/' to create nested folder paths
+        expect(result.substitutedPath).toBe('Projects/work/urgent/client');
     });
 
     it('should handle array values with sanitization', () => {
         const result = substituteVariables('Projects/{tags}', {
             tags: ['work/', 'urgent<>', 'client:'],
         });
-        expect(result.substitutedPath).toBe('Projects/work-,urgent,client');
+        // Arrays are now joined with '/' to create nested folder paths
+        expect(result.substitutedPath).toBe('Projects/work-/urgent/client');
     });
 
     it('should handle empty array', () => {
@@ -155,7 +157,8 @@ describe('substituteVariables', () => {
         const result = substituteVariables('Projects/{tags}', {
             tags: ['work', '', null, 'urgent'],
         });
-        expect(result.substitutedPath).toBe('Projects/work,urgent');
+        // Arrays are now joined with '/' to create nested folder paths
+        expect(result.substitutedPath).toBe('Projects/work/urgent');
     });
 
     it('should handle null value', () => {

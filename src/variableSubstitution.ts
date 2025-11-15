@@ -77,7 +77,8 @@ function sanitizePathValue(value: unknown): string {
  * Missing variables are replaced with empty strings, which may result in
  * consecutive slashes that are automatically cleaned up.
  *
- * Array values are joined with commas.
+ * Array values are joined with slashes to create nested folder paths.
+ * For example, tags: [work, project] becomes "work/project".
  * Date values are formatted as ISO date strings.
  *
  * @param template - Destination path template (e.g., "Projects/{project}/{status}")
@@ -89,6 +90,11 @@ function sanitizePathValue(value: unknown): string {
  * // result.substitutedPath === "Projects/Website"
  * // result.substituted === ["project"]
  * // result.missing === []
+ *
+ * @example
+ * // Array values create nested paths
+ * const result = substituteVariables("{tags}", {tags: ["work", "urgent"]});
+ * // result.substitutedPath === "work/urgent"
  */
 export function substituteVariables(
     template: string,
@@ -120,9 +126,10 @@ export function substituteVariables(
             substituted.push(variable);
             let sanitizedValue: string;
 
-            // Handle array values
+            // Handle array values - join with '/' to create nested folder paths
+            // Example: tags: [work, project] → "work/project"
             if (Array.isArray(value)) {
-                sanitizedValue = value.map(v => sanitizePathValue(v)).filter(Boolean).join(',');
+                sanitizedValue = value.map(v => sanitizePathValue(v)).filter(Boolean).join('/');
             } else {
                 sanitizedValue = sanitizePathValue(value);
             }

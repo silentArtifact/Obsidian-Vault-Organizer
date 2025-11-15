@@ -14,6 +14,7 @@ import {
 import {
     VaultOrganizerError,
     FileConflictError,
+    InvalidPathError,
     categorizeError,
 } from './src/errors';
 import {
@@ -39,6 +40,8 @@ export default class VaultOrganizer extends Plugin {
     private ruleParseErrors: FrontmatterRuleDeserializationError[] = [];
     private ruleSettingTab?: RuleSettingTab;
     private batchOperationInProgress = false;
+    // Race condition protection: track files currently being processed
+    private filesBeingProcessed = new Set<string>();
 
     /**
      * Called when the plugin is loaded. Initializes settings, registers event handlers,
@@ -318,7 +321,11 @@ export default class VaultOrganizer extends Plugin {
 
     private async recordMove(fromPath: string, toPath: string, fileName: string, ruleKey: string, skipSave = false): Promise<void> {
         if (!fromPath || !toPath || !fileName) {
-            throw new Error('Invalid move parameters: fromPath, toPath, and fileName are required');
+            throw new InvalidPathError(
+                fromPath || toPath || '(empty)',
+                'empty',
+                'fromPath, toPath, and fileName are required for recording move history'
+            );
         }
 
         const entry: MoveHistoryEntry = {
@@ -394,7 +401,8 @@ export default class VaultOrganizer extends Plugin {
         } catch (err) {
             const categorized = categorizeError(err, lastMove.toPath, 'move', lastMove.fromPath);
             new Notice(categorized.getUserMessage());
-            console.error('[Vault Organizer] Undo failed:', err);
+            // Log as warning since undo failures are expected in some scenarios (e.g., file conflicts)
+            console.warn('[Vault Organizer] Undo operation failed:', err);
         }
     }
 
@@ -410,7 +418,7 @@ export default class VaultOrganizer extends Plugin {
         });
 
         if (!validation.valid || !validation.sanitizedPath) {
-            throw validation.error || new Error('Path validation failed');
+            throw validation.error || new InvalidPathError(folderPath, 'invalid-characters', 'Path validation failed');
         }
 
         const sanitizedPath = validation.sanitizedPath;
@@ -455,6 +463,7 @@ export default class VaultOrganizer extends Plugin {
      * @param extension - The file extension
      * @param strategy - The conflict resolution strategy
      * @returns A unique file path
+     * @throws {FileConflictError} If unable to generate a unique filename after max attempts
      */
     private generateUniqueFilename(basePath: string, extension: string, strategy: 'append-number' | 'append-timestamp'): string {
         if (strategy === 'append-timestamp') {
@@ -462,12 +471,25 @@ export default class VaultOrganizer extends Plugin {
             return `${basePath}-${timestamp}${extension}`;
         }
 
-        // append-number strategy
+        // append-number strategy with infinite loop protection
+        // Maximum attempts to find a unique filename (prevents infinite loop)
+        const MAX_ATTEMPTS = 1000;
         let counter = 1;
         let newPath = `${basePath}-${counter}${extension}`;
 
         while (this.app.vault.getAbstractFileByPath(newPath)) {
             counter++;
+
+            // CRITICAL: Prevent infinite loop by capping attempts
+            if (counter > MAX_ATTEMPTS) {
+                throw new FileConflictError(
+                    `${basePath}${extension}`,
+                    undefined,
+                    'max-attempts',
+                    'generate-unique-filename'
+                );
+            }
+
             newPath = `${basePath}-${counter}${extension}`;
         }
 
@@ -475,6 +497,13 @@ export default class VaultOrganizer extends Plugin {
     }
 
     private async applyRulesToFile(file: TFile, skipSave = false): Promise<void> {
+        // CRITICAL: Race condition protection - prevent concurrent processing of the same file
+        // Multiple events (create, modify, rename, metadata-changed) can fire for a single file change
+        if (this.filesBeingProcessed.has(file.path)) {
+            return;
+        }
+
+        this.filesBeingProcessed.add(file.path);
         let intendedDestination: string | undefined;
         try {
             // Check if file is excluded
@@ -514,7 +543,11 @@ export default class VaultOrganizer extends Plugin {
             // Validate the destination path before attempting to move
             const destinationValidation = validateDestinationPath(destinationWithVariables);
             if (!destinationValidation.valid || !destinationValidation.sanitizedPath) {
-                throw destinationValidation.error || new Error('Destination path validation failed');
+                throw destinationValidation.error || new InvalidPathError(
+                    destinationWithVariables,
+                    'invalid-characters',
+                    'Destination path validation failed'
+                );
             }
 
             const destinationFolder = destinationValidation.sanitizedPath;
@@ -526,7 +559,11 @@ export default class VaultOrganizer extends Plugin {
             });
 
             if (!fullPathValidation.valid || !fullPathValidation.sanitizedPath) {
-                throw fullPathValidation.error || new Error('Full path validation failed');
+                throw fullPathValidation.error || new InvalidPathError(
+                    `${destinationFolder}/${file.name}`,
+                    'invalid-characters',
+                    'Full path validation failed'
+                );
             }
 
             let newPath = fullPathValidation.sanitizedPath;
@@ -581,13 +618,17 @@ export default class VaultOrganizer extends Plugin {
             // Handle categorized errors with user-friendly messages
             if (err instanceof VaultOrganizerError) {
                 new Notice(err.getUserMessage());
-                console.error(`[Vault Organizer] ${err.name}:`, err.message, err);
+                // Log expected errors at warn level (e.g., validation failures, conflicts)
+                console.warn(`[Vault Organizer] Expected error - ${err.name}:`, err.message);
             } else {
-                // Fallback for unexpected errors
+                // Fallback for unexpected errors - log at error level for investigation
                 const categorized = categorizeError(err, file.path, 'move', intendedDestination);
                 new Notice(categorized.getUserMessage());
-                console.error('[Vault Organizer] Unexpected error:', err);
+                console.error('[Vault Organizer] Unexpected error during file processing:', err);
             }
+        } finally {
+            // CRITICAL: Always remove file from processing set to prevent deadlock
+            this.filesBeingProcessed.delete(file.path);
         }
     }
 
@@ -668,7 +709,7 @@ export default class VaultOrganizer extends Plugin {
                     file,
                     currentPath: file.path,
                     ruleIndex,
-                    error: destinationValidation.error,
+                    error: destinationValidation.error ?? new InvalidPathError(destinationWithVariables, 'invalid-characters', 'Unknown validation error'),
                     warnings: [...substitutionWarnings, ...(destinationValidation.warnings ?? [])],
                 });
                 continue;
@@ -692,7 +733,7 @@ export default class VaultOrganizer extends Plugin {
                     file,
                     currentPath: file.path,
                     ruleIndex,
-                    error: newPathValidation.error,
+                    error: newPathValidation.error ?? new InvalidPathError(combinedPath, 'invalid-characters', 'Unknown validation error'),
                     warnings: warnings.length ? warnings : undefined,
                 });
                 continue;
