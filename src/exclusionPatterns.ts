@@ -96,9 +96,35 @@ export function isExcluded(filePath: string, patterns: string[]): boolean {
 
         // Also check if the file is inside an excluded folder
         // e.g., "Templates" should exclude "Templates/subfolder/file.md"
+        // but NOT "TemplatesBackup/file.md" (requires path boundary check)
         const folderPattern = normalizedPattern.replace(/\/$/, '');
-        if (normalizedPath.startsWith(folderPattern + '/')) {
-            return true;
+
+        // Only match if pattern is at path boundary (start of path or after /)
+        if (normalizedPath === folderPattern ||
+            normalizedPath.startsWith(folderPattern + '/')) {
+            // Additional safety: ensure no wildcard expansion confusion
+            // If pattern has no wildcards, verify exact folder name match
+            if (!folderPattern.includes('*') && !folderPattern.includes('?')) {
+                // For patterns without wildcards, ensure we're matching a complete path segment
+                const pathSegments = normalizedPath.split('/');
+                const patternSegments = folderPattern.split('/');
+
+                // Check if all pattern segments match from the start
+                let matches = true;
+                for (let i = 0; i < patternSegments.length; i++) {
+                    if (pathSegments[i] !== patternSegments[i]) {
+                        matches = false;
+                        break;
+                    }
+                }
+
+                if (matches) {
+                    return true;
+                }
+            } else {
+                // For patterns with wildcards, the startsWith check is sufficient
+                return true;
+            }
         }
     }
 

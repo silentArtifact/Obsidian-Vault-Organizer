@@ -18,6 +18,38 @@ const SETTINGS_SAVE_DEBOUNCE_MS = 300;
  */
 const METADATA_REFRESH_DEBOUNCE_MS = 1000;
 
+/**
+ * Validates regex flags to ensure they contain only valid characters.
+ * Valid flags: g (global), i (case-insensitive), m (multiline), s (dotAll),
+ *             u (unicode), y (sticky), d (hasIndices)
+ *
+ * @param flags - The regex flags string to validate
+ * @returns An object containing validation result and sanitized flags
+ */
+function validateRegexFlags(flags: string): { valid: boolean; sanitized: string; invalid: string[] } {
+    const validFlags = new Set(['g', 'i', 'm', 's', 'u', 'y', 'd']);
+    const flagChars = flags.split('');
+    const invalid: string[] = [];
+    const sanitized: string[] = [];
+
+    for (const char of flagChars) {
+        if (validFlags.has(char)) {
+            // Avoid duplicates in sanitized output
+            if (!sanitized.includes(char)) {
+                sanitized.push(char);
+            }
+        } else if (char.trim()) { // Ignore whitespace
+            invalid.push(char);
+        }
+    }
+
+    return {
+        valid: invalid.length === 0,
+        sanitized: sanitized.join(''),
+        invalid,
+    };
+}
+
 export class RuleSettingTab extends PluginSettingTab {
     plugin: VaultOrganizer;
     private debouncedSaveOnly: ReturnType<typeof debounce>;
@@ -405,7 +437,26 @@ export class RuleSettingTab extends PluginSettingTab {
                             return;
                         }
                         if (currentRule.matchType === 'regex') {
-                            currentRule.flags = value;
+                            // Real-time validation of regex flags
+                            const validation = validateRegexFlags(value);
+
+                            if (!validation.valid) {
+                                // Visual feedback: add warning class to input
+                                text.inputEl.classList.add('vault-organizer-invalid-flags');
+                                text.inputEl.title = `Invalid flag(s): ${validation.invalid.join(', ')}. Valid flags: g, i, m, s, u, y, d`;
+                            } else {
+                                text.inputEl.classList.remove('vault-organizer-invalid-flags');
+                                text.inputEl.title = '';
+                            }
+
+                            // Always save the sanitized value
+                            currentRule.flags = validation.sanitized;
+
+                            // Update input if sanitized value differs (removes duplicates/invalid chars)
+                            if (value !== validation.sanitized) {
+                                text.setValue(validation.sanitized);
+                            }
+
                             this.scheduleSaveOnly();
                         }
                     });
@@ -610,7 +661,26 @@ export class RuleSettingTab extends PluginSettingTab {
                                     return;
                                 }
                                 if (currentRule.conditions[conditionIndex].matchType === 'regex') {
-                                    currentRule.conditions[conditionIndex].flags = value;
+                                    // Real-time validation of regex flags
+                                    const validation = validateRegexFlags(value);
+
+                                    if (!validation.valid) {
+                                        // Visual feedback: add warning class to input
+                                        text.inputEl.classList.add('vault-organizer-invalid-flags');
+                                        text.inputEl.title = `Invalid flag(s): ${validation.invalid.join(', ')}. Valid flags: g, i, m, s, u, y, d`;
+                                    } else {
+                                        text.inputEl.classList.remove('vault-organizer-invalid-flags');
+                                        text.inputEl.title = '';
+                                    }
+
+                                    // Always save the sanitized value
+                                    currentRule.conditions[conditionIndex].flags = validation.sanitized;
+
+                                    // Update input if sanitized value differs (removes duplicates/invalid chars)
+                                    if (value !== validation.sanitized) {
+                                        text.setValue(validation.sanitized);
+                                    }
+
                                     this.scheduleSaveOnly();
                                 }
                             });

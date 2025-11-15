@@ -25,18 +25,47 @@ export interface VaultOrganizerSettings {
 export const DEFAULT_SETTINGS: VaultOrganizerSettings = {
     rules: [],
     moveHistory: [],
+    // Default history size of 50 entries balances utility with storage/performance
+    // - Provides sufficient history for typical undo scenarios
+    // - Keeps settings file size manageable (each entry ~200 bytes = ~10KB total)
+    // - Users can increase this via settings if needed
     maxHistorySize: 50,
     excludePatterns: [],
 };
 
-export type RuleTestResult = {
-    file: TFile;
-    currentPath: string;
-    ruleIndex: number;
-    newPath?: string;
-    warnings?: string[];
-    error?: InvalidPathError;
-};
+/**
+ * Result of testing a rule against a file.
+ * Uses discriminated union to ensure newPath and error are mutually exclusive.
+ */
+export type RuleTestResult =
+    | {
+        /** The file being tested */
+        file: TFile;
+        /** Current path of the file */
+        currentPath: string;
+        /** Index of the matching rule */
+        ruleIndex: number;
+        /** The destination path the file would be moved to */
+        newPath: string;
+        /** Optional warnings about the move */
+        warnings?: string[];
+        /** No error - operation would succeed */
+        error?: never;
+    }
+    | {
+        /** The file being tested */
+        file: TFile;
+        /** Current path of the file */
+        currentPath: string;
+        /** Index of the matching rule */
+        ruleIndex: number;
+        /** No new path - operation failed */
+        newPath?: never;
+        /** Optional warnings about the error */
+        warnings?: string[];
+        /** Error that would prevent the move */
+        error: InvalidPathError;
+    };
 
 export const MATCH_TYPE_OPTIONS: { value: FrontmatterMatchType; label: string }[] = [
     { value: 'equals', label: MATCH_TYPES.equals },
@@ -74,10 +103,9 @@ export function normalizeSerializedRule(rule: SerializedFrontmatterRule): Serial
         normalized.isRegex = true;
         normalized.flags = rule.flags ?? '';
     } else {
+        // Clean up regex-specific properties for consistency
         delete normalized.isRegex;
-        if ('flags' in normalized) {
-            delete normalized.flags;
-        }
+        delete normalized.flags;
     }
     return normalized;
 }
