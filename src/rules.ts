@@ -354,7 +354,8 @@ function deserializeCondition(serialized: SerializedRuleCondition): RuleConditio
                 caseInsensitive: serialized.caseInsensitive,
             };
         } catch (error) {
-            console.warn(`[Vault Organizer] Failed to deserialize regex condition for key "${serialized.key}":`, error);
+            // Use error level since this prevents the condition from working
+            console.error(`[Vault Organizer] Failed to deserialize regex condition for key "${serialized.key}":`, error);
             return undefined;
         }
     }
@@ -421,8 +422,9 @@ export function deserializeFrontmatterRules(data: SerializedFrontmatterRule[] = 
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 const destinationInfo = rule.destination ? ` (destination: "${rule.destination}")` : '';
-                const warningMessage = `[Obsidian Vault Organizer] Failed to deserialize regex for frontmatter rule "${rule.key}"${destinationInfo}: ${message}. Rule will be ignored.`;
-                console.warn(warningMessage);
+                const errorMessage = `[Obsidian Vault Organizer] Failed to deserialize regex for frontmatter rule "${rule.key}"${destinationInfo}: ${message}. Rule will be ignored.`;
+                // Use error level since this prevents the rule from working at all
+                console.error(errorMessage);
                 errors.push({
                     index,
                     message,

@@ -29,12 +29,39 @@ export const DEFAULT_SETTINGS: VaultOrganizerSettings = {
     excludePatterns: [],
 };
 
+/**
+ * Result from testing a rule against a file.
+ *
+ * This type represents three mutually exclusive states:
+ *
+ * 1. **Success**: File would be moved
+ *    - `newPath` is present
+ *    - `error` is undefined
+ *    - `warnings` may be present (non-blocking issues)
+ *
+ * 2. **Error**: File cannot be moved due to validation error
+ *    - `error` is present (blocking issue)
+ *    - `newPath` may be undefined
+ *    - `warnings` may be present
+ *
+ * 3. **No Match**: Rule doesn't apply to this file
+ *    - Both `newPath` and `error` are undefined
+ *    - `warnings` may be present
+ *
+ * When processing results:
+ * - Check `error` first - if present, file cannot be moved
+ * - Then check `newPath` - if present and no error, file would be moved
+ * - Otherwise, rule doesn't apply to this file
+ */
 export type RuleTestResult = {
     file: TFile;
     currentPath: string;
     ruleIndex: number;
+    /** Path where file would be moved to (only present if rule matches and path is valid) */
     newPath?: string;
+    /** Non-blocking warnings about the rule application */
     warnings?: string[];
+    /** Blocking error that prevents the file from being moved */
     error?: InvalidPathError;
 };
 
@@ -75,9 +102,7 @@ export function normalizeSerializedRule(rule: SerializedFrontmatterRule): Serial
         normalized.flags = rule.flags ?? '';
     } else {
         delete normalized.isRegex;
-        if ('flags' in normalized) {
-            delete normalized.flags;
-        }
+        delete normalized.flags;
     }
     return normalized;
 }
