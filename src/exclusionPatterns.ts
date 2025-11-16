@@ -129,7 +129,7 @@ export function isExcluded(filePath: string, patterns: string[]): boolean {
         // Additional folder hierarchy check for literal (non-wildcard) patterns
         // This ensures "Templates" matches "Templates/subfolder/file.md"
         // but NOT "TemplatesBackup/file.md"
-        if (!normalizedPattern.includes('*') && !normalizedPattern.includes('?')) {
+        if (!normalizedPattern.includes('*') && !normalizedPattern.includes('?') && !normalizedPattern.includes('[')) {
             const folderPattern = normalizedPattern.replace(/\/$/, '');
 
             // Check if path is exactly the folder or starts with folder/

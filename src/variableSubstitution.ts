@@ -9,6 +9,7 @@
 
 import type { CachedMetadata } from 'obsidian';
 import { validateDestinationPath } from './pathSanitization';
+import { PATH_LIMITS } from './config';
 
 export interface SubstitutionResult {
     /** The path with variables substituted */
@@ -19,6 +20,8 @@ export interface SubstitutionResult {
     missing: string[];
     /** Whether any variables were found in the template */
     hasVariables: boolean;
+    /** Variables whose array values were truncated due to depth limit */
+    truncated?: string[];
 }
 
 /**
@@ -113,15 +116,18 @@ export function substituteVariables(
 
     const substituted: string[] = [];
     const missing: string[] = [];
+    const truncated: string[] = [];
     let result = template;
 
     for (const variable of variables) {
         const value = frontmatter?.[variable];
+        // Pre-compile regex for this variable to avoid recreation
+        const variableRegex = new RegExp(`\\{${escapeRegex(variable)}\\}`, 'g');
 
         if (value === null || value === undefined) {
             missing.push(variable);
             // Replace with empty string - path will be validated later
-            result = result.replace(new RegExp(`\\{${escapeRegex(variable)}\\}`, 'g'), '');
+            result = result.replace(variableRegex, '');
         } else {
             substituted.push(variable);
             let sanitizedValue: string;
@@ -129,12 +135,17 @@ export function substituteVariables(
             // Handle array values - join with '/' to create nested folder paths
             // Example: tags: [work, project] → "work/project"
             if (Array.isArray(value)) {
-                sanitizedValue = value.map(v => sanitizePathValue(v)).filter(Boolean).join('/');
+                // Limit array depth to prevent excessively deep folder hierarchies
+                const limitedArray = value.slice(0, PATH_LIMITS.MAX_ARRAY_PATH_DEPTH);
+                if (value.length > PATH_LIMITS.MAX_ARRAY_PATH_DEPTH) {
+                    truncated.push(variable);
+                }
+                sanitizedValue = limitedArray.map(v => sanitizePathValue(v)).filter(Boolean).join('/');
             } else {
                 sanitizedValue = sanitizePathValue(value);
             }
 
-            result = result.replace(new RegExp(`\\{${escapeRegex(variable)}\\}`, 'g'), sanitizedValue);
+            result = result.replace(variableRegex, sanitizedValue);
         }
     }
 
@@ -149,6 +160,7 @@ export function substituteVariables(
         substituted,
         missing,
         hasVariables: true,
+        truncated: truncated.length > 0 ? truncated : undefined,
     };
 }
 
