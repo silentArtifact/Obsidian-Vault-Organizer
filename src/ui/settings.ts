@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, debounce, getAllTags } from 'obsidian';
+import { App, PluginSettingTab, Setting, debounce, getAllTags, Notice } from 'obsidian';
 import type { TextComponent, ToggleComponent } from 'obsidian';
 import type VaultOrganizer from '../../main';
 import type { FrontmatterMatchType } from '../rules';
@@ -222,8 +222,17 @@ export class RuleSettingTab extends PluginSettingTab {
                         this.plugin.settings.rules[index] = this.plugin.settings.rules[index - 1];
                         this.plugin.settings.rules[index - 1] = temp;
                         this.cancelPendingSaveOnly();
-                        await this.plugin.saveSettingsWithoutReorganizing();
-                        this.display();
+                        try {
+                            await this.plugin.saveSettingsWithoutReorganizing();
+                            this.display();
+                        } catch (err) {
+                            new Notice('Failed to save settings. Rule order was not changed.');
+                            console.error('Settings save error:', err);
+                            // Revert the swap
+                            const revert = this.plugin.settings.rules[index - 1];
+                            this.plugin.settings.rules[index - 1] = this.plugin.settings.rules[index];
+                            this.plugin.settings.rules[index] = revert;
+                        }
                     }));
 
             // Add down arrow button
@@ -239,8 +248,17 @@ export class RuleSettingTab extends PluginSettingTab {
                         this.plugin.settings.rules[index] = this.plugin.settings.rules[index + 1];
                         this.plugin.settings.rules[index + 1] = temp;
                         this.cancelPendingSaveOnly();
-                        await this.plugin.saveSettingsWithoutReorganizing();
-                        this.display();
+                        try {
+                            await this.plugin.saveSettingsWithoutReorganizing();
+                            this.display();
+                        } catch (err) {
+                            new Notice('Failed to save settings. Rule order was not changed.');
+                            console.error('Settings save error:', err);
+                            // Revert the swap
+                            const revert = this.plugin.settings.rules[index + 1];
+                            this.plugin.settings.rules[index + 1] = this.plugin.settings.rules[index];
+                            this.plugin.settings.rules[index] = revert;
+                        }
                     }));
 
             const refreshWarning = () => {
@@ -289,6 +307,7 @@ export class RuleSettingTab extends PluginSettingTab {
                     .onClick(() => {
                         const keys = this.getFrontmatterKeys();
                         this.openFrontmatterKeyPicker(keys, (key) => {
+                            // Check if rule at index still exists (protects against deletion during modal)
                             const currentRule = this.plugin.settings.rules[index];
                             if (!currentRule || !keyTextComponent) {
                                 return;
@@ -321,6 +340,7 @@ export class RuleSettingTab extends PluginSettingTab {
                     .onClick(() => {
                         const tags = this.getAggregatedTags();
                         this.openTagPicker(tags, (tag) => {
+                            // Check if rule at index still exists (protects against deletion during modal)
                             const currentRule = this.plugin.settings.rules[index];
                             if (!currentRule || !valueTextComponent) {
                                 return;
@@ -507,18 +527,32 @@ export class RuleSettingTab extends PluginSettingTab {
                             matchType: 'equals'
                         });
                         this.cancelPendingSaveOnly();
-                        await this.plugin.saveSettingsWithoutReorganizing();
-                        this.display();
+                        try {
+                            await this.plugin.saveSettingsWithoutReorganizing();
+                            this.display();
+                        } catch (err) {
+                            new Notice('Failed to save settings. Please try again.');
+                            console.error('Settings save error:', err);
+                            // Revert the change
+                            currentRule.conditions.pop();
+                        }
                     }));
 
             setting.addButton(btn =>
                 btn
                     .setButtonText(SETTINGS_UI.BUTTONS.REMOVE)
                     .onClick(async () => {
-                        this.plugin.settings.rules.splice(index, 1);
+                        const removedRule = this.plugin.settings.rules.splice(index, 1)[0];
                         this.cancelPendingSaveOnly();
-                        await this.plugin.saveSettingsWithoutReorganizing();
-                        this.display();
+                        try {
+                            await this.plugin.saveSettingsWithoutReorganizing();
+                            this.display();
+                        } catch (err) {
+                            new Notice('Failed to save settings. Rule was not removed.');
+                            console.error('Settings save error:', err);
+                            // Revert the change
+                            this.plugin.settings.rules.splice(index, 0, removedRule);
+                        }
                     }));
 
             // Additional Conditions Section
@@ -708,10 +742,17 @@ export class RuleSettingTab extends PluginSettingTab {
                                 if (!currentRule?.conditions) {
                                     return;
                                 }
-                                currentRule.conditions.splice(conditionIndex, 1);
+                                const removedCondition = currentRule.conditions.splice(conditionIndex, 1)[0];
                                 this.cancelPendingSaveOnly();
-                                await this.plugin.saveSettingsWithoutReorganizing();
-                                this.display();
+                                try {
+                                    await this.plugin.saveSettingsWithoutReorganizing();
+                                    this.display();
+                                } catch (err) {
+                                    new Notice('Failed to save settings. Condition was not removed.');
+                                    console.error('Settings save error:', err);
+                                    // Revert the change
+                                    currentRule.conditions.splice(conditionIndex, 0, removedCondition);
+                                }
                             }));
 
                     updateConditionRegexControlsVisibility();
@@ -729,8 +770,15 @@ export class RuleSettingTab extends PluginSettingTab {
                     .onClick(async () => {
                         this.plugin.settings.rules.push({ key: '', value: '', destination: '', matchType: 'equals', debug: false, enabled: false });
                         this.cancelPendingSaveOnly();
-                        await this.plugin.saveSettingsWithoutReorganizing();
-                        this.display();
+                        try {
+                            await this.plugin.saveSettingsWithoutReorganizing();
+                            this.display();
+                        } catch (err) {
+                            new Notice('Failed to save settings. Rule was not added.');
+                            console.error('Settings save error:', err);
+                            // Revert the change
+                            this.plugin.settings.rules.pop();
+                        }
                     }));
 
         new Setting(containerEl)

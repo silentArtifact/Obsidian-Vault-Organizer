@@ -204,9 +204,9 @@ export default class VaultOrganizer extends Plugin {
      * ```typescript
      * await this.withBatchOperation(async () => {
      *     // Multiple operations that would normally save settings
-     *     await this.applyRulesToFile(file1, true);
-     *     await this.applyRulesToFile(file2, true);
-     *     await this.applyRulesToFile(file3, true);
+     *     await this.applyRulesToFile(file1);
+     *     await this.applyRulesToFile(file2);
+     *     await this.applyRulesToFile(file3);
      *     // ... hundreds more files
      * });
      * // Settings are saved once here, after all operations complete
@@ -231,7 +231,7 @@ export default class VaultOrganizer extends Plugin {
      * // Reorganize all files with a single settings save
      * await this.withBatchOperation(async () => {
      *     for (const file of markdownFiles) {
-     *         await this.applyRulesToFile(file, true);
+     *         await this.applyRulesToFile(file);
      *     }
      * });
      *
@@ -322,18 +322,17 @@ export default class VaultOrganizer extends Plugin {
 
     /**
      * Records a file move in the move history for undo functionality.
+     * Settings are automatically managed by the batch operation pattern -
+     * saveSettings() will handle deferred persistence when in a batch operation.
      *
      * @param fromPath - The original path of the file
      * @param toPath - The new path of the file
      * @param fileName - The name of the file
      * @param ruleKey - The frontmatter key of the rule that triggered the move
-     * @param skipSave - DEPRECATED: No longer has any effect due to batch operation pattern.
-     *                   Settings are automatically saved by withBatchOperation() when needed.
-     *                   This parameter is kept for backward compatibility and will be removed in v2.0.
      * @throws {InvalidPathError} If any required parameter is missing
      * @private
      */
-    private async recordMove(fromPath: string, toPath: string, fileName: string, ruleKey: string, skipSave = false): Promise<void> {
+    private async recordMove(fromPath: string, toPath: string, fileName: string, ruleKey: string): Promise<void> {
         if (!fromPath || !toPath || !fileName || !ruleKey) {
             throw new InvalidPathError(
                 fromPath || toPath || '(empty)',
@@ -353,13 +352,12 @@ export default class VaultOrganizer extends Plugin {
         this.settings.moveHistory.unshift(entry);
 
         // Trim history to max size
-        if (this.settings.moveHistory.length >= this.settings.maxHistorySize) {
+        if (this.settings.moveHistory.length > this.settings.maxHistorySize) {
             this.settings.moveHistory = this.settings.moveHistory.slice(0, this.settings.maxHistorySize);
         }
 
-        if (!skipSave) {
-            await this.saveSettings();
-        }
+        // Save settings - will be deferred if in a batch operation
+        await this.saveSettings();
     }
 
     async undoLastMove(): Promise<void> {
@@ -510,14 +508,12 @@ export default class VaultOrganizer extends Plugin {
 
     /**
      * Applies frontmatter rules to a file and moves it to the appropriate destination.
+     * Settings persistence is automatically managed by the batch operation pattern.
      *
      * @param file - The file to process
-     * @param skipSave - DEPRECATED: No longer has any effect due to batch operation pattern.
-     *                   Settings are automatically saved by withBatchOperation() when needed.
-     *                   This parameter is kept for backward compatibility and will be removed in v2.0.
      * @private
      */
-    private async applyRulesToFile(file: TFile, skipSave = false): Promise<void> {
+    private async applyRulesToFile(file: TFile): Promise<void> {
         // CRITICAL: Race condition protection - prevent concurrent processing of the same file
         // Multiple events (create, modify, rename, metadata-changed) can fire for a single file change
         // Store original path to handle file renames during processing
@@ -529,6 +525,7 @@ export default class VaultOrganizer extends Plugin {
 
         this.filesBeingProcessed.add(originalPath);
         let intendedDestination: string | undefined;
+        let finalPath: string | undefined; // Track final path if file is renamed
         try {
             // Check if file is excluded
             if (isExcluded(file.path, this.settings.excludePatterns)) {
@@ -613,8 +610,13 @@ export default class VaultOrganizer extends Plugin {
             const oldPath = file.path;
             try {
                 await this.app.fileManager.renameFile(file, newPath);
+                finalPath = newPath; // Track the new path for cleanup
+                // Also protect the new path from concurrent processing
+                if (newPath !== originalPath) {
+                    this.filesBeingProcessed.add(newPath);
+                }
                 // Record successful move in history
-                await this.recordMove(oldPath, newPath, file.name, rule.key, skipSave);
+                await this.recordMove(oldPath, newPath, file.name, rule.key);
             } catch (err) {
                 // Categorize the rename error for better user feedback
                 const categorized = categorizeError(err, file.path, 'move', newPath);
@@ -633,9 +635,12 @@ export default class VaultOrganizer extends Plugin {
                 Logger.error(LOG_MESSAGES.FILE_PROCESSING.UNEXPECTED_ERROR, err);
             }
         } finally {
-            // CRITICAL: Always remove file from processing set using original path
-            // This prevents issues if the file was renamed during processing
+            // CRITICAL: Always remove file from processing set
+            // Clean up both original and final paths to prevent race conditions
             this.filesBeingProcessed.delete(originalPath);
+            if (finalPath && finalPath !== originalPath) {
+                this.filesBeingProcessed.delete(finalPath);
+            }
         }
     }
 
@@ -658,9 +663,7 @@ export default class VaultOrganizer extends Plugin {
         await this.withBatchOperation(async () => {
             for (let i = 0; i < markdownFiles.length; i++) {
                 const file = markdownFiles[i];
-                // skipSave parameter is now redundant due to batch operation,
-                // but kept for backward compatibility
-                await this.applyRulesToFile(file, true);
+                await this.applyRulesToFile(file);
 
                 // Rate limiting: yield to event loop periodically to keep UI responsive
                 if ((i + 1) % PERFORMANCE_CONFIG.BULK_OPERATION_BATCH_SIZE === 0) {

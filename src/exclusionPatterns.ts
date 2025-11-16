@@ -4,7 +4,14 @@
  */
 
 /**
+ * Maximum number of compiled regex patterns to cache.
+ * Prevents unbounded memory growth in long-running sessions with dynamic patterns.
+ */
+const MAX_REGEX_CACHE_SIZE = 100;
+
+/**
  * Cache for compiled regex patterns to avoid recompilation.
+ * Implements LRU (Least Recently Used) eviction when cache size exceeds MAX_REGEX_CACHE_SIZE.
  * Key: glob pattern string, Value: compiled RegExp
  */
 const regexCache = new Map<string, RegExp>();
@@ -26,10 +33,23 @@ function globToRegex(pattern: string): RegExp {
     // Check cache first
     const cached = regexCache.get(pattern);
     if (cached) {
+        // Move to end (most recently used) by deleting and re-adding
+        regexCache.delete(pattern);
+        regexCache.set(pattern, cached);
         return cached;
     }
 
     const regex = compileGlobPattern(pattern);
+
+    // LRU eviction: remove oldest entry if cache is full
+    if (regexCache.size >= MAX_REGEX_CACHE_SIZE) {
+        // Map iteration order is insertion order, so first key is the oldest
+        const oldestKey = regexCache.keys().next().value;
+        if (oldestKey !== undefined) {
+            regexCache.delete(oldestKey);
+        }
+    }
+
     // Cache the compiled regex for future use
     regexCache.set(pattern, regex);
     return regex;
