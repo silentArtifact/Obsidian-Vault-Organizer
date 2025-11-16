@@ -7,6 +7,7 @@ import { MATCH_TYPE_OPTIONS, normalizeSerializedRule } from '../types';
 import { RuleTagPickerModal, RuleFrontmatterKeyPickerModal, TestAllRulesModal } from './modals';
 import { SETTINGS_UI } from '../constants';
 import { DEBOUNCE_CONFIG } from '../config';
+import { validateExclusionPattern } from '../exclusionPatterns';
 
 /**
  * Validates regex flags to ensure they contain only valid characters.
@@ -557,8 +558,31 @@ export class RuleSettingTab extends PluginSettingTab {
 
             // Additional Conditions Section
             if (rule.conditions && rule.conditions.length > 0) {
+                // Add conditions header with operator explanation
+                const conditionsHeaderEl = document.createElement('div');
+                conditionsHeaderEl.className = 'vault-organizer-conditions-header';
+                containerEl.appendChild(conditionsHeaderEl);
+
+                const operator = rule.conditionOperator ?? 'AND';
+                const operatorBadge = document.createElement('span');
+                operatorBadge.className = `vault-organizer-operator-badge vault-organizer-operator-${operator.toLowerCase()}`;
+                operatorBadge.textContent = operator;
+                conditionsHeaderEl.appendChild(operatorBadge);
+
+                const operatorDesc = document.createElement('span');
+                operatorDesc.className = 'vault-organizer-operator-desc';
+                operatorDesc.textContent = operator === 'AND'
+                    ? 'All conditions below must match'
+                    : 'Any condition below can match';
+                conditionsHeaderEl.appendChild(operatorDesc);
+
+                // Create conditions container
+                const conditionsContainer = document.createElement('div');
+                conditionsContainer.className = 'vault-organizer-conditions-container';
+                containerEl.appendChild(conditionsContainer);
+
                 rule.conditions.forEach((condition, conditionIndex) => {
-                    const conditionSetting = new Setting(containerEl)
+                    const conditionSetting = new Setting(conditionsContainer)
                         .setName(`${SETTINGS_UI.LABELS.CONDITIONS_SECTION} ${conditionIndex + 1}`)
                         .setClass('vault-organizer-condition');
 
@@ -801,9 +825,137 @@ export class RuleSettingTab extends PluginSettingTab {
                     }));
 
         // Exclusion Patterns Section
-        // Note: UI for exclusion patterns will be added in a future update
-        // For now, exclusion patterns can be configured by manually editing the plugin's data.json file
-        // The backend fully supports exclusion patterns via the excludePatterns array in settings
+        new Setting(containerEl)
+            .setName(SETTINGS_UI.EXCLUSION_PATTERNS_NAME)
+            .setDesc(SETTINGS_UI.EXCLUSION_PATTERNS_DESCRIPTION);
+
+        // Display existing exclusion patterns
+        this.plugin.settings.excludePatterns.forEach((pattern, index) => {
+            new Setting(containerEl)
+                .setName(`Pattern ${index + 1}`)
+                .addText(text => {
+                    text
+                        .setPlaceholder(SETTINGS_UI.PLACEHOLDERS.EXCLUSION_PATTERN)
+                        .setValue(pattern)
+                        .onChange(async (value) => {
+                            const trimmedValue = value.trim();
+                            // Validate pattern in real-time
+                            const validation = validateExclusionPattern(trimmedValue);
+                            if (!validation.valid && trimmedValue !== '') {
+                                text.inputEl.classList.add('vault-organizer-invalid-pattern');
+                                text.inputEl.title = validation.error || 'Invalid pattern';
+                            } else {
+                                text.inputEl.classList.remove('vault-organizer-invalid-pattern');
+                                text.inputEl.title = '';
+                            }
+
+                            this.plugin.settings.excludePatterns[index] = trimmedValue;
+                            this.scheduleSaveOnly();
+                        });
+                    text.inputEl.style.width = '300px';
+                })
+                .addButton(btn =>
+                    btn
+                        .setButtonText(SETTINGS_UI.BUTTONS.REMOVE)
+                        .setTooltip('Remove this exclusion pattern')
+                        .onClick(async () => {
+                            this.plugin.settings.excludePatterns.splice(index, 1);
+                            this.cancelPendingSaveOnly();
+                            try {
+                                await this.plugin.saveSettingsWithoutReorganizing();
+                                this.display();
+                            } catch (err) {
+                                new Notice('Failed to save settings. Pattern was not removed.');
+                                console.error('Settings save error:', err);
+                                // Revert the change
+                                this.plugin.settings.excludePatterns.splice(index, 0, pattern);
+                            }
+                        }));
+        });
+
+        // Add new exclusion pattern button
+        new Setting(containerEl)
+            .addButton(btn =>
+                btn
+                    .setButtonText(SETTINGS_UI.BUTTONS.ADD_EXCLUSION)
+                    .setTooltip('Add a new exclusion pattern')
+                    .onClick(async () => {
+                        this.plugin.settings.excludePatterns.push('');
+                        this.cancelPendingSaveOnly();
+                        try {
+                            await this.plugin.saveSettingsWithoutReorganizing();
+                            this.display();
+                        } catch (err) {
+                            new Notice('Failed to save settings. Pattern was not added.');
+                            console.error('Settings save error:', err);
+                            // Revert the change
+                            this.plugin.settings.excludePatterns.pop();
+                        }
+                    }));
+
+        // Add common pattern templates section
+        const templatesContainer = document.createElement('div');
+        templatesContainer.className = 'vault-organizer-pattern-templates';
+        containerEl.appendChild(templatesContainer);
+
+        const templatesHeading = document.createElement('h3');
+        templatesHeading.className = 'vault-organizer-templates-heading';
+        templatesHeading.textContent = 'Common Patterns';
+        templatesContainer.appendChild(templatesHeading);
+
+        const commonPatterns = [
+            { pattern: 'Templates/**', description: 'Exclude all files in Templates folder' },
+            { pattern: '*.excalidraw.md', description: 'Exclude Excalidraw drawings' },
+            { pattern: 'Archive/**', description: 'Exclude all files in Archive folder' },
+            { pattern: '.obsidian/**', description: 'Exclude Obsidian config files' },
+            { pattern: '**/Daily Notes/**', description: 'Exclude Daily Notes in any location' },
+        ];
+
+        const templatesList = document.createElement('div');
+        templatesList.className = 'vault-organizer-template-list';
+        templatesContainer.appendChild(templatesList);
+
+        commonPatterns.forEach(({ pattern, description }) => {
+            const templateItem = document.createElement('div');
+            templateItem.className = 'vault-organizer-template-item';
+            templatesList.appendChild(templateItem);
+
+            const templateText = document.createElement('span');
+            templateText.className = 'vault-organizer-template-pattern';
+            templateText.textContent = pattern;
+            templateItem.appendChild(templateText);
+
+            const templateDesc = document.createElement('span');
+            templateDesc.className = 'vault-organizer-template-desc';
+            templateDesc.textContent = ` - ${description}`;
+            templateItem.appendChild(templateDesc);
+
+            const addButton = document.createElement('button');
+            addButton.className = 'vault-organizer-template-add-btn';
+            addButton.textContent = 'Add';
+            templateItem.appendChild(addButton);
+
+            addButton.addEventListener('click', async () => {
+                // Check if pattern already exists
+                if (this.plugin.settings.excludePatterns.includes(pattern)) {
+                    new Notice('This pattern is already in your exclusion list.');
+                    return;
+                }
+
+                this.plugin.settings.excludePatterns.push(pattern);
+                this.cancelPendingSaveOnly();
+                try {
+                    await this.plugin.saveSettingsWithoutReorganizing();
+                    new Notice(`Added exclusion pattern: ${pattern}`);
+                    this.display();
+                } catch (err) {
+                    new Notice('Failed to save settings. Pattern was not added.');
+                    console.error('Settings save error:', err);
+                    // Revert the change
+                    this.plugin.settings.excludePatterns.pop();
+                }
+            });
+        });
     }
 
     /**
