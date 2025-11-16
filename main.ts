@@ -29,7 +29,7 @@ import {
 } from './src/types';
 import { RuleSettingTab } from './src/ui/settings';
 import { MoveHistoryModal } from './src/ui/modals';
-import { COMMANDS, NOTICES } from './src/constants';
+import { COMMANDS, NOTICES, WARNINGS, LOG_MESSAGES } from './src/constants';
 import { isExcluded } from './src/exclusionPatterns';
 import { Logger } from './src/logger';
 import { PERFORMANCE_CONFIG } from './src/config';
@@ -246,7 +246,7 @@ export default class VaultOrganizer extends Plugin {
     async withBatchOperation<T>(operation: () => Promise<T>): Promise<T> {
         // Prevent nested batch operations
         if (this.batchOperationInProgress) {
-            Logger.warn('Nested batch operations are not supported. Using existing batch context.');
+            Logger.warn(WARNINGS.NESTED_BATCH_OPERATION);
             return await operation();
         }
 
@@ -320,12 +320,25 @@ export default class VaultOrganizer extends Plugin {
         return this.ruleParseErrors.find(error => error.index === index);
     }
 
+    /**
+     * Records a file move in the move history for undo functionality.
+     *
+     * @param fromPath - The original path of the file
+     * @param toPath - The new path of the file
+     * @param fileName - The name of the file
+     * @param ruleKey - The frontmatter key of the rule that triggered the move
+     * @param skipSave - DEPRECATED: No longer has any effect due to batch operation pattern.
+     *                   Settings are automatically saved by withBatchOperation() when needed.
+     *                   This parameter is kept for backward compatibility and will be removed in v2.0.
+     * @throws {InvalidPathError} If any required parameter is missing
+     * @private
+     */
     private async recordMove(fromPath: string, toPath: string, fileName: string, ruleKey: string, skipSave = false): Promise<void> {
-        if (!fromPath || !toPath || !fileName) {
+        if (!fromPath || !toPath || !fileName || !ruleKey) {
             throw new InvalidPathError(
                 fromPath || toPath || '(empty)',
                 'empty',
-                'fromPath, toPath, and fileName are required for recording move history'
+                'fromPath, toPath, fileName, and ruleKey are required for recording move history'
             );
         }
 
@@ -340,7 +353,7 @@ export default class VaultOrganizer extends Plugin {
         this.settings.moveHistory.unshift(entry);
 
         // Trim history to max size
-        if (this.settings.moveHistory.length > this.settings.maxHistorySize) {
+        if (this.settings.moveHistory.length >= this.settings.maxHistorySize) {
             this.settings.moveHistory = this.settings.moveHistory.slice(0, this.settings.maxHistorySize);
         }
 
@@ -403,7 +416,7 @@ export default class VaultOrganizer extends Plugin {
             const categorized = categorizeError(err, lastMove.toPath, 'move', lastMove.fromPath);
             new Notice(categorized.getUserMessage());
             // Log as warning since undo failures are expected in some scenarios (e.g., file conflicts)
-            Logger.warn('Undo operation failed', err);
+            Logger.warn(LOG_MESSAGES.FILE_PROCESSING.UNDO_FAILED, err);
         }
     }
 
@@ -495,6 +508,15 @@ export default class VaultOrganizer extends Plugin {
         return newPath;
     }
 
+    /**
+     * Applies frontmatter rules to a file and moves it to the appropriate destination.
+     *
+     * @param file - The file to process
+     * @param skipSave - DEPRECATED: No longer has any effect due to batch operation pattern.
+     *                   Settings are automatically saved by withBatchOperation() when needed.
+     *                   This parameter is kept for backward compatibility and will be removed in v2.0.
+     * @private
+     */
     private async applyRulesToFile(file: TFile, skipSave = false): Promise<void> {
         // CRITICAL: Race condition protection - prevent concurrent processing of the same file
         // Multiple events (create, modify, rename, metadata-changed) can fire for a single file change
@@ -603,12 +625,12 @@ export default class VaultOrganizer extends Plugin {
             if (err instanceof VaultOrganizerError) {
                 new Notice(err.getUserMessage());
                 // Log expected errors at warn level (e.g., validation failures, conflicts)
-                Logger.warn(`Expected error - ${err.name}`, err.message);
+                Logger.warn(LOG_MESSAGES.FILE_PROCESSING.EXPECTED_ERROR(err.name), err.message);
             } else {
                 // Fallback for unexpected errors - log at error level for investigation
                 const categorized = categorizeError(err, file.path, 'move', intendedDestination);
                 new Notice(categorized.getUserMessage());
-                Logger.error('Unexpected error during file processing', err);
+                Logger.error(LOG_MESSAGES.FILE_PROCESSING.UNEXPECTED_ERROR, err);
             }
         } finally {
             // CRITICAL: Always remove file from processing set using original path

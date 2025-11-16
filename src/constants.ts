@@ -167,6 +167,24 @@ export const NOTICES = {
 } as const;
 
 /**
+ * Internal warning messages for logging
+ */
+export const WARNINGS = {
+	NESTED_BATCH_OPERATION: 'Nested batch operations are not supported. Using existing batch context.',
+} as const;
+
+/**
+ * Internal error log messages and categories
+ */
+export const LOG_MESSAGES = {
+	FILE_PROCESSING: {
+		EXPECTED_ERROR: (errorName: string) => `Expected error during file processing - ${errorName}`,
+		UNEXPECTED_ERROR: 'Unexpected error during file processing',
+		UNDO_FAILED: 'Undo operation failed',
+	},
+} as const;
+
+/**
  * Match type option labels for the dropdown
  */
 export const MATCH_TYPES = {

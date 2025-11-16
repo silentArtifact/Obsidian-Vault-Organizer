@@ -64,4 +64,11 @@ export const PATH_LIMITS = {
 	 * Common limit across most filesystems.
 	 */
 	MAX_COMPONENT_LENGTH: 255,
+
+	/**
+	 * Maximum array depth when converting frontmatter arrays to nested paths.
+	 * Prevents excessively deep folder hierarchies from large arrays.
+	 * Example: tags: [a, b, c, d, e] with limit 3 → "a/b/c" (remaining ignored)
+	 */
+	MAX_ARRAY_PATH_DEPTH: 5,
 } as const;
