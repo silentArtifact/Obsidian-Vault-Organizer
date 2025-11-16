@@ -6,17 +6,7 @@ import { requiresValue, hasValidValue } from '../rules';
 import { MATCH_TYPE_OPTIONS, normalizeSerializedRule } from '../types';
 import { RuleTagPickerModal, RuleFrontmatterKeyPickerModal, TestAllRulesModal } from './modals';
 import { SETTINGS_UI } from '../constants';
-
-/**
- * Debounce delay in milliseconds for saving settings changes.
- */
-const SETTINGS_SAVE_DEBOUNCE_MS = 300;
-
-/**
- * Debounce delay in milliseconds for refreshing metadata cache.
- * Higher value to reduce performance impact of frequent metadata updates.
- */
-const METADATA_REFRESH_DEBOUNCE_MS = 1000;
+import { DEBOUNCE_CONFIG } from '../config';
 
 /**
  * Validates regex flags to ensure they contain only valid characters.
@@ -56,6 +46,8 @@ export class RuleSettingTab extends PluginSettingTab {
     private debouncedRefreshMetadata: ReturnType<typeof debounce>;
     private aggregatedTags: string[] = [];
     private frontmatterKeys: string[] = [];
+    // Cache invalidation flag - set to true when metadata changes
+    private metadataCacheDirty = true;
 
     /**
      * Creates a new rule settings tab for the VaultOrganizer plugin.
@@ -70,11 +62,11 @@ export class RuleSettingTab extends PluginSettingTab {
         this.plugin = plugin;
         this.debouncedSaveOnly = debounce(async () => {
             await this.plugin.saveSettingsWithoutReorganizing();
-        }, SETTINGS_SAVE_DEBOUNCE_MS);
+        }, DEBOUNCE_CONFIG.SETTINGS_SAVE_MS);
         this.debouncedRefreshMetadata = debounce(() => {
-            this.refreshAggregatedTags();
-            this.refreshFrontmatterKeys();
-        }, METADATA_REFRESH_DEBOUNCE_MS);
+            // Mark cache as dirty instead of immediately refreshing
+            this.metadataCacheDirty = true;
+        }, DEBOUNCE_CONFIG.METADATA_REFRESH_MS);
         this.refreshAggregatedTags();
         this.refreshFrontmatterKeys();
         this.plugin.registerEvent(this.plugin.app.metadataCache.on('resolved', () => {
@@ -105,10 +97,12 @@ export class RuleSettingTab extends PluginSettingTab {
             tags.forEach(tag => tagSet.add(tag));
         });
         this.aggregatedTags = Array.from(tagSet).sort((a, b) => a.localeCompare(b));
+        this.metadataCacheDirty = false;
     }
 
     private getAggregatedTags(): string[] {
-        if (!this.aggregatedTags.length) {
+        // Only refresh if cache is dirty or empty
+        if (this.metadataCacheDirty || !this.aggregatedTags.length) {
             this.refreshAggregatedTags();
         }
         return this.aggregatedTags;
@@ -128,10 +122,12 @@ export class RuleSettingTab extends PluginSettingTab {
                 .forEach(key => keySet.add(key));
         });
         this.frontmatterKeys = Array.from(keySet).sort((a, b) => a.localeCompare(b));
+        this.metadataCacheDirty = false;
     }
 
     private getFrontmatterKeys(): string[] {
-        if (!this.frontmatterKeys.length) {
+        // Only refresh if cache is dirty or empty
+        if (this.metadataCacheDirty || !this.frontmatterKeys.length) {
             this.refreshFrontmatterKeys();
         }
         return this.frontmatterKeys;
@@ -176,8 +172,8 @@ export class RuleSettingTab extends PluginSettingTab {
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
-        this.refreshAggregatedTags();
-        this.refreshFrontmatterKeys();
+        // Mark cache as dirty when displaying settings to ensure fresh data
+        this.metadataCacheDirty = true;
         this.plugin.settings.rules = this.plugin.settings.rules.map(normalizeSerializedRule);
 
         this.plugin.settings.rules.forEach((rule, index) => {

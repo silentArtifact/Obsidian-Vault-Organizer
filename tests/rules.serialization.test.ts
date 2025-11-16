@@ -60,7 +60,12 @@ describe('Frontmatter rule serialization', () => {
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0].rule).toEqual({ ...malformed[0], matchType: 'regex' });
       expect(result.errors[0].message).toBeDefined();
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to deserialize regex'));
+      // Logger prefixes with [Vault Organizer] WARN:
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[Vault Organizer] WARN:'),
+        expect.stringContaining('Failed to deserialize regex'),
+        expect.anything()
+      );
     } finally {
       warnSpy.mockRestore();
     }

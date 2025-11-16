@@ -127,7 +127,7 @@ describe('handleFileChange', () => {
     const file = createMockFile('Temp/Test.md');
     const renameError = new Error('rename failed');
     renameFile.mockRejectedValueOnce(renameError);
-    // Expected errors are now logged at warn level
+    // Expected errors are now logged at warn level with Logger
     const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     await handle(file);
@@ -135,8 +135,10 @@ describe('handleFileChange', () => {
     expect(renameFile).toHaveBeenCalledWith(file, 'Journal/Test.md');
     // Updated to match new error categorization format
     expect(Notice).toHaveBeenCalledWith('Failed to move "Temp/Test.md": rename failed.');
+    // Logger now formats as: [Vault Organizer] WARN: message context
     expect(consoleWarnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[Vault Organizer]'),
+      expect.stringContaining('[Vault Organizer] WARN:'),
+      expect.stringContaining('Expected error'),
       expect.anything()
     );
 
@@ -151,7 +153,7 @@ describe('handleFileChange', () => {
     createFolder.mockImplementationOnce(async () => {
       throw folderError;
     });
-    // Expected errors are now logged at warn level
+    // Expected errors are now logged at warn level with Logger
     const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     await handle(file);
@@ -161,9 +163,11 @@ describe('handleFileChange', () => {
     expect(Notice).toHaveBeenCalledWith(
       'Permission denied: Cannot create folder "Journal". Check file permissions and try again.'
     );
+    // Logger format: [Vault Organizer] WARN: message context
     expect(consoleWarnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[Vault Organizer]'),
-      expect.stringContaining('Permission denied')
+      expect.stringContaining('[Vault Organizer] WARN:'),
+      expect.stringContaining('Expected error'),
+      expect.anything()
     );
 
     consoleWarnSpy.mockRestore();

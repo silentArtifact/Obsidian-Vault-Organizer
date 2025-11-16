@@ -18,7 +18,6 @@ import {
     categorizeError,
 } from './src/errors';
 import {
-    validateDestinationPath,
     validatePath,
 } from './src/pathSanitization';
 import {
@@ -31,11 +30,13 @@ import {
 import { RuleSettingTab } from './src/ui/settings';
 import { MoveHistoryModal } from './src/ui/modals';
 import { COMMANDS, NOTICES } from './src/constants';
-import { substituteVariables } from './src/variableSubstitution';
 import { isExcluded } from './src/exclusionPatterns';
+import { Logger } from './src/logger';
+import { PERFORMANCE_CONFIG } from './src/config';
+import { validateAndPrepareDestination } from './src/pathValidationHelper';
 
 export default class VaultOrganizer extends Plugin {
-    settings: VaultOrganizerSettings;
+    settings!: VaultOrganizerSettings;
     private rules: FrontmatterRule[] = [];
     private ruleParseErrors: FrontmatterRuleDeserializationError[] = [];
     private ruleSettingTab?: RuleSettingTab;
@@ -245,7 +246,7 @@ export default class VaultOrganizer extends Plugin {
     async withBatchOperation<T>(operation: () => Promise<T>): Promise<T> {
         // Prevent nested batch operations
         if (this.batchOperationInProgress) {
-            console.warn('[Vault Organizer] Nested batch operations are not supported. Using existing batch context.');
+            Logger.warn('Nested batch operations are not supported. Using existing batch context.');
             return await operation();
         }
 
@@ -402,7 +403,7 @@ export default class VaultOrganizer extends Plugin {
             const categorized = categorizeError(err, lastMove.toPath, 'move', lastMove.fromPath);
             new Notice(categorized.getUserMessage());
             // Log as warning since undo failures are expected in some scenarios (e.g., file conflicts)
-            console.warn('[Vault Organizer] Undo operation failed:', err);
+            Logger.warn('Undo operation failed', err);
         }
     }
 
@@ -472,8 +473,6 @@ export default class VaultOrganizer extends Plugin {
         }
 
         // append-number strategy with infinite loop protection
-        // Maximum attempts to find a unique filename (prevents infinite loop)
-        const MAX_ATTEMPTS = 1000;
         let counter = 1;
         let newPath = `${basePath}-${counter}${extension}`;
 
@@ -481,7 +480,7 @@ export default class VaultOrganizer extends Plugin {
             counter++;
 
             // CRITICAL: Prevent infinite loop by capping attempts
-            if (counter > MAX_ATTEMPTS) {
+            if (counter > PERFORMANCE_CONFIG.MAX_UNIQUE_FILENAME_ATTEMPTS) {
                 throw new FileConflictError(
                     `${basePath}${extension}`,
                     undefined,
@@ -499,11 +498,14 @@ export default class VaultOrganizer extends Plugin {
     private async applyRulesToFile(file: TFile, skipSave = false): Promise<void> {
         // CRITICAL: Race condition protection - prevent concurrent processing of the same file
         // Multiple events (create, modify, rename, metadata-changed) can fire for a single file change
-        if (this.filesBeingProcessed.has(file.path)) {
+        // Store original path to handle file renames during processing
+        const originalPath = file.path;
+
+        if (this.filesBeingProcessed.has(originalPath)) {
             return;
         }
 
-        this.filesBeingProcessed.add(file.path);
+        this.filesBeingProcessed.add(originalPath);
         let intendedDestination: string | undefined;
         try {
             // Check if file is excluded
@@ -531,42 +533,24 @@ export default class VaultOrganizer extends Plugin {
                 return;
             }
 
-            // Substitute variables in destination path
-            const substitutionResult = substituteVariables(trimmedDestination, frontmatter);
-            const destinationWithVariables = substitutionResult.substitutedPath;
+            // Validate and prepare destination using shared helper
+            const validation = validateAndPrepareDestination(trimmedDestination, file.name, frontmatter);
+
+            if (!validation.valid || !validation.fullPath || !validation.destinationFolder) {
+                throw validation.error ?? new InvalidPathError(
+                    trimmedDestination,
+                    'invalid-characters',
+                    'Destination validation failed'
+                );
+            }
 
             // Warn about missing variables in debug mode
-            if (rule.debug && substitutionResult.missing.length > 0) {
-                new Notice(`DEBUG: Missing variables in destination: ${substitutionResult.missing.join(', ')}`);
+            if (rule.debug && validation.substitution && validation.substitution.missing.length > 0) {
+                new Notice(`DEBUG: Missing variables in destination: ${validation.substitution.missing.join(', ')}`);
             }
 
-            // Validate the destination path before attempting to move
-            const destinationValidation = validateDestinationPath(destinationWithVariables);
-            if (!destinationValidation.valid || !destinationValidation.sanitizedPath) {
-                throw destinationValidation.error || new InvalidPathError(
-                    destinationWithVariables,
-                    'invalid-characters',
-                    'Destination path validation failed'
-                );
-            }
-
-            const destinationFolder = destinationValidation.sanitizedPath;
-
-            // Validate the full destination path (folder + filename)
-            const fullPathValidation = validatePath(`${destinationFolder}/${file.name}`, {
-                allowEmpty: false,
-                allowAbsolute: false,
-            });
-
-            if (!fullPathValidation.valid || !fullPathValidation.sanitizedPath) {
-                throw fullPathValidation.error || new InvalidPathError(
-                    `${destinationFolder}/${file.name}`,
-                    'invalid-characters',
-                    'Full path validation failed'
-                );
-            }
-
-            let newPath = fullPathValidation.sanitizedPath;
+            let newPath = validation.fullPath;
+            const destinationFolder = validation.destinationFolder;
             intendedDestination = newPath;
 
             if (file.path === newPath) {
@@ -619,16 +603,17 @@ export default class VaultOrganizer extends Plugin {
             if (err instanceof VaultOrganizerError) {
                 new Notice(err.getUserMessage());
                 // Log expected errors at warn level (e.g., validation failures, conflicts)
-                console.warn(`[Vault Organizer] Expected error - ${err.name}:`, err.message);
+                Logger.warn(`Expected error - ${err.name}`, err.message);
             } else {
                 // Fallback for unexpected errors - log at error level for investigation
                 const categorized = categorizeError(err, file.path, 'move', intendedDestination);
                 new Notice(categorized.getUserMessage());
-                console.error('[Vault Organizer] Unexpected error during file processing:', err);
+                Logger.error('Unexpected error during file processing', err);
             }
         } finally {
-            // CRITICAL: Always remove file from processing set to prevent deadlock
-            this.filesBeingProcessed.delete(file.path);
+            // CRITICAL: Always remove file from processing set using original path
+            // This prevents issues if the file was renamed during processing
+            this.filesBeingProcessed.delete(originalPath);
         }
     }
 
@@ -638,7 +623,8 @@ export default class VaultOrganizer extends Plugin {
      * persistence until all files have been processed.
      *
      * PERFORMANCE: For large vaults (1000+ files), this reduces settings saves
-     * from potentially thousands down to a single save operation.
+     * from potentially thousands down to a single save operation. Also includes
+     * rate limiting to prevent UI blocking.
      */
     private async reorganizeAllMarkdownFiles(): Promise<void> {
         const markdownFiles = this.app.vault.getMarkdownFiles?.();
@@ -648,10 +634,16 @@ export default class VaultOrganizer extends Plugin {
 
         // Use batch operation pattern to save settings only once at the end
         await this.withBatchOperation(async () => {
-            for (const file of markdownFiles) {
+            for (let i = 0; i < markdownFiles.length; i++) {
+                const file = markdownFiles[i];
                 // skipSave parameter is now redundant due to batch operation,
                 // but kept for backward compatibility
                 await this.applyRulesToFile(file, true);
+
+                // Rate limiting: yield to event loop periodically to keep UI responsive
+                if ((i + 1) % PERFORMANCE_CONFIG.BULK_OPERATION_BATCH_SIZE === 0) {
+                    await new Promise(resolve => setTimeout(resolve, PERFORMANCE_CONFIG.BULK_OPERATION_BATCH_DELAY_MS));
+                }
             }
         });
     }
@@ -696,62 +688,28 @@ export default class VaultOrganizer extends Plugin {
                 continue;
             }
 
-            // Apply variable substitution
-            const substitutionResult = substituteVariables(trimmedDestination, frontmatter);
-            const destinationWithVariables = substitutionResult.substitutedPath;
-            const substitutionWarnings = substitutionResult.missing.length > 0
-                ? [`Missing variables: ${substitutionResult.missing.join(', ')}`]
-                : [];
+            // Validate and prepare destination using shared helper
+            const validation = validateAndPrepareDestination(trimmedDestination, file.name, frontmatter);
 
-            const destinationValidation = validateDestinationPath(destinationWithVariables);
-            if (!destinationValidation.valid) {
+            if (!validation.valid || !validation.fullPath) {
                 results.push({
                     file,
                     currentPath: file.path,
                     ruleIndex,
-                    error: destinationValidation.error ?? new InvalidPathError(destinationWithVariables, 'invalid-characters', 'Unknown validation error'),
-                    warnings: [...substitutionWarnings, ...(destinationValidation.warnings ?? [])],
+                    error: validation.error ?? new InvalidPathError(trimmedDestination, 'invalid-characters', 'Unknown validation error'),
+                    warnings: validation.warnings?.length ? validation.warnings : undefined,
                 });
                 continue;
             }
 
-            const sanitizedDestination = destinationValidation.sanitizedPath ?? '';
-            const combinedPath = sanitizedDestination ? `${sanitizedDestination}/${file.name}` : file.name;
-            const newPathValidation = validatePath(combinedPath, {
-                allowEmpty: false,
-                allowAbsolute: false,
-                checkReservedNames: true,
-            });
-
-            if (!newPathValidation.valid || !newPathValidation.sanitizedPath) {
-                const warnings = [
-                    ...substitutionWarnings,
-                    ...(destinationValidation.warnings ?? []),
-                    ...(newPathValidation.warnings ?? []),
-                ];
-                results.push({
-                    file,
-                    currentPath: file.path,
-                    ruleIndex,
-                    error: newPathValidation.error ?? new InvalidPathError(combinedPath, 'invalid-characters', 'Unknown validation error'),
-                    warnings: warnings.length ? warnings : undefined,
-                });
-                continue;
-            }
-
-            const sanitizedNewPath = newPathValidation.sanitizedPath;
+            const sanitizedNewPath = validation.fullPath;
             if (file.path !== sanitizedNewPath) {
-                const warnings = [
-                    ...substitutionWarnings,
-                    ...(destinationValidation.warnings ?? []),
-                    ...(newPathValidation.warnings ?? []),
-                ];
                 results.push({
                     file,
                     currentPath: file.path,
                     newPath: sanitizedNewPath,
                     ruleIndex,
-                    warnings: warnings.length ? warnings : undefined,
+                    warnings: validation.warnings?.length ? validation.warnings : undefined,
                 });
             }
         }

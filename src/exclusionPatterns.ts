@@ -4,7 +4,15 @@
  */
 
 /**
+ * Cache for compiled regex patterns to avoid recompilation.
+ * Key: glob pattern string, Value: compiled RegExp
+ */
+const regexCache = new Map<string, RegExp>();
+
+/**
  * Converts a glob pattern to a regular expression.
+ * Results are cached to improve performance for repeated pattern matching.
+ *
  * Supports:
  * - * matches any characters except /
  * - ** matches any characters including /
@@ -15,6 +23,26 @@
  * @returns RegExp that matches the pattern
  */
 function globToRegex(pattern: string): RegExp {
+    // Check cache first
+    const cached = regexCache.get(pattern);
+    if (cached) {
+        return cached;
+    }
+
+    const regex = compileGlobPattern(pattern);
+    // Cache the compiled regex for future use
+    regexCache.set(pattern, regex);
+    return regex;
+}
+
+/**
+ * Compiles a glob pattern into a RegExp.
+ * Internal function that does the actual compilation work.
+ *
+ * @param pattern - Glob pattern to compile
+ * @returns Compiled RegExp
+ */
+function compileGlobPattern(pattern: string): RegExp {
     let regexStr = '^';
     let i = 0;
 
@@ -65,6 +93,9 @@ function globToRegex(pattern: string): RegExp {
 /**
  * Checks if a file path matches any of the exclusion patterns.
  *
+ * **Performance:** Uses cached regex compilation for fast repeated checks.
+ * **Multi-level matching:** Handles both exact pattern matches and folder hierarchy matches.
+ *
  * @param filePath - The file path to check (relative to vault root)
  * @param patterns - Array of glob patterns
  * @returns true if the file should be excluded, false otherwise
@@ -90,40 +121,29 @@ export function isExcluded(filePath: string, patterns: string[]): boolean {
         const normalizedPattern = pattern.trim().replace(/\\/g, '/');
         const regex = globToRegex(normalizedPattern);
 
+        // Primary regex match - handles most cases including wildcards
         if (regex.test(normalizedPath)) {
             return true;
         }
 
-        // Also check if the file is inside an excluded folder
-        // e.g., "Templates" should exclude "Templates/subfolder/file.md"
-        // but NOT "TemplatesBackup/file.md" (requires path boundary check)
-        const folderPattern = normalizedPattern.replace(/\/$/, '');
+        // Additional folder hierarchy check for literal (non-wildcard) patterns
+        // This ensures "Templates" matches "Templates/subfolder/file.md"
+        // but NOT "TemplatesBackup/file.md"
+        if (!normalizedPattern.includes('*') && !normalizedPattern.includes('?')) {
+            const folderPattern = normalizedPattern.replace(/\/$/, '');
 
-        // Only match if pattern is at path boundary (start of path or after /)
-        if (normalizedPath === folderPattern ||
-            normalizedPath.startsWith(folderPattern + '/')) {
-            // Additional safety: ensure no wildcard expansion confusion
-            // If pattern has no wildcards, verify exact folder name match
-            if (!folderPattern.includes('*') && !folderPattern.includes('?')) {
-                // For patterns without wildcards, ensure we're matching a complete path segment
+            // Check if path is exactly the folder or starts with folder/
+            if (normalizedPath === folderPattern || normalizedPath.startsWith(folderPattern + '/')) {
+                // Verify it's a complete path segment match (not a partial string match)
                 const pathSegments = normalizedPath.split('/');
                 const patternSegments = folderPattern.split('/');
 
-                // Check if all pattern segments match from the start
-                let matches = true;
-                for (let i = 0; i < patternSegments.length; i++) {
-                    if (pathSegments[i] !== patternSegments[i]) {
-                        matches = false;
-                        break;
-                    }
-                }
+                // All pattern segments must match from the beginning
+                const allSegmentsMatch = patternSegments.every((segment, i) => pathSegments[i] === segment);
 
-                if (matches) {
+                if (allSegmentsMatch) {
                     return true;
                 }
-            } else {
-                // For patterns with wildcards, the startsWith check is sufficient
-                return true;
             }
         }
     }
