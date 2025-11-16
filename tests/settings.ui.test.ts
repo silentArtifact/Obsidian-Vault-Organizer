@@ -948,5 +948,152 @@ describe('settings UI', () => {
       expect(plugin.settings.rules[0].conditions?.[0].value).toBe('#daily');
     });
   });
+
+  describe('exclusion patterns UI', () => {
+    it('displays exclusion patterns section', async () => {
+      tab.display();
+      await flushPromises();
+
+      const heading = screen.getByText('Exclusion Patterns');
+      expect(heading).toBeDefined();
+    });
+
+    it('shows add pattern button', async () => {
+      tab.display();
+      await flushPromises();
+
+      const addButton = screen.getByText('Add Pattern');
+      expect(addButton).toBeDefined();
+    });
+
+    it('displays existing exclusion patterns', async () => {
+      plugin.settings.excludePatterns = ['Templates/**', '*.excalidraw.md'];
+      tab.display();
+      await flushPromises();
+
+      const patterns = screen.getAllByPlaceholderText(/e\.g\., Templates/);
+      expect(patterns.length).toBe(2);
+      expect((patterns[0] as HTMLInputElement).value).toBe('Templates/**');
+      expect((patterns[1] as HTMLInputElement).value).toBe('*.excalidraw.md');
+    });
+
+    it('allows adding new exclusion pattern', async () => {
+      tab.display();
+      await flushPromises();
+
+      const addButton = screen.getByText('Add Pattern');
+      await fireEvent.click(addButton);
+      await flushPromises();
+
+      expect(plugin.settings.excludePatterns.length).toBe(1);
+      expect(plugin.settings.excludePatterns[0]).toBe('');
+    });
+
+    it('allows editing exclusion patterns', async () => {
+      plugin.settings.excludePatterns = [''];
+      tab.display();
+      await flushPromises();
+
+      const patternInput = screen.getByPlaceholderText(/e\.g\., Templates/) as HTMLInputElement;
+      await fireEvent.input(patternInput, { target: { value: 'Archive/**' } });
+      await jest.runOnlyPendingTimersAsync();
+
+      expect(plugin.settings.excludePatterns[0]).toBe('Archive/**');
+    });
+
+    it('allows removing exclusion patterns', async () => {
+      plugin.settings.excludePatterns = ['Templates/**', '*.excalidraw.md'];
+      tab.display();
+      await flushPromises();
+
+      const removeButtons = screen.getAllByText('Remove').filter(btn =>
+        (btn as HTMLElement).title === 'Remove this exclusion pattern'
+      );
+      expect(removeButtons.length).toBe(2);
+
+      await fireEvent.click(removeButtons[0]);
+      await flushPromises();
+
+      expect(plugin.settings.excludePatterns.length).toBe(1);
+      expect(plugin.settings.excludePatterns[0]).toBe('*.excalidraw.md');
+    });
+
+    it('displays common pattern templates', async () => {
+      tab.display();
+      await flushPromises();
+
+      const templatesHeading = screen.getByText('Common Patterns');
+      expect(templatesHeading).toBeDefined();
+
+      // Check for template buttons
+      const addButtons = Array.from(document.querySelectorAll('.vault-organizer-template-add-btn'));
+      expect(addButtons.length).toBeGreaterThan(0);
+    });
+
+    it('allows adding common pattern template', async () => {
+      tab.display();
+      await flushPromises();
+
+      const addButtons = Array.from(document.querySelectorAll('.vault-organizer-template-add-btn')) as HTMLButtonElement[];
+      expect(addButtons.length).toBeGreaterThan(0);
+
+      // Click first template add button
+      await fireEvent.click(addButtons[0]);
+      await flushPromises();
+
+      expect(plugin.settings.excludePatterns.length).toBe(1);
+      expect(plugin.settings.excludePatterns[0]).toBe('Templates/**');
+    });
+
+    it('prevents adding duplicate patterns from templates', async () => {
+      plugin.settings.excludePatterns = ['Templates/**'];
+      tab.display();
+      await flushPromises();
+
+      const addButtons = Array.from(document.querySelectorAll('.vault-organizer-template-add-btn')) as HTMLButtonElement[];
+
+      // Try to add Templates/** again (it's the first template)
+      await fireEvent.click(addButtons[0]);
+      await flushPromises();
+
+      // Should still only have 1 pattern
+      expect(plugin.settings.excludePatterns.length).toBe(1);
+      expect(plugin.settings.excludePatterns[0]).toBe('Templates/**');
+    });
+
+    it('validates pattern input in real-time', async () => {
+      plugin.settings.excludePatterns = [''];
+      tab.display();
+      await flushPromises();
+
+      const patternInput = screen.getByPlaceholderText(/e\.g\., Templates/) as HTMLInputElement;
+
+      // Enter invalid pattern with invalid characters
+      await fireEvent.input(patternInput, { target: { value: 'test<>|' } });
+      await jest.runOnlyPendingTimersAsync();
+
+      // Input should have invalid class
+      expect(patternInput.classList.contains('vault-organizer-invalid-pattern')).toBe(true);
+      expect(patternInput.title).toContain('invalid');
+    });
+
+    it('removes invalid class when pattern becomes valid', async () => {
+      plugin.settings.excludePatterns = [''];
+      tab.display();
+      await flushPromises();
+
+      const patternInput = screen.getByPlaceholderText(/e\.g\., Templates/) as HTMLInputElement;
+
+      // Enter invalid pattern
+      await fireEvent.input(patternInput, { target: { value: 'test<>|' } });
+      await jest.runOnlyPendingTimersAsync();
+      expect(patternInput.classList.contains('vault-organizer-invalid-pattern')).toBe(true);
+
+      // Fix pattern
+      await fireEvent.input(patternInput, { target: { value: 'test/**' } });
+      await jest.runOnlyPendingTimersAsync();
+      expect(patternInput.classList.contains('vault-organizer-invalid-pattern')).toBe(false);
+    });
+  });
 });
 

@@ -55,28 +55,190 @@ body.is-phone .vault-organizer-rule-warning {
 }
 
 /* Multi-condition styling */
-.vault-organizer-condition {
-  border-left: 2px solid var(--background-modifier-border);
-  margin-left: var(--size-4-4);
-  padding-left: var(--size-4-4);
+.vault-organizer-conditions-header {
+  display: flex;
+  align-items: center;
+  gap: var(--size-2-2);
+  margin: var(--size-4-2) 0;
+  padding: var(--size-2-2) var(--size-4-2);
   background-color: var(--background-secondary);
+  border-radius: var(--radius-m);
+  border-left: 3px solid var(--interactive-accent);
+}
+
+.vault-organizer-operator-badge {
+  display: inline-block;
+  padding: var(--size-2-1) var(--size-4-2);
+  border-radius: var(--radius-s);
+  font-weight: 700;
+  font-size: 0.85em;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.vault-organizer-operator-and {
+  background-color: var(--color-blue);
+  color: var(--text-on-accent);
+}
+
+.vault-organizer-operator-or {
+  background-color: var(--color-orange);
+  color: var(--text-on-accent);
+}
+
+.vault-organizer-operator-desc {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+.vault-organizer-conditions-container {
+  margin-left: var(--size-4-4);
+  border-left: 3px solid var(--background-modifier-border);
+  padding-left: var(--size-2-2);
+}
+
+.vault-organizer-condition {
+  margin-bottom: var(--size-2-2);
+  padding: var(--size-2-2);
+  background-color: var(--background-secondary);
+  border-radius: var(--radius-s);
+  border: 1px solid var(--background-modifier-border);
+  position: relative;
+}
+
+.vault-organizer-condition::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 50%;
+  background-color: var(--interactive-accent);
   border-radius: var(--radius-s);
 }
 
 .vault-organizer-condition .setting-item-name {
   font-size: 0.9em;
-  font-weight: 500;
-  color: var(--text-muted);
+  font-weight: 600;
+  color: var(--text-normal);
+  margin-bottom: var(--size-2-1);
 }
 
 /* Mobile responsive styling for conditions */
-body.is-phone .vault-organizer-condition {
+body.is-phone .vault-organizer-conditions-header {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--size-2-1);
+  padding: var(--size-2-1);
+}
+
+body.is-phone .vault-organizer-conditions-container {
   margin-left: var(--size-2-2);
-  padding-left: var(--size-2-2);
+  padding-left: var(--size-2-1);
+}
+
+body.is-phone .vault-organizer-condition {
+  padding: var(--size-2-1);
 }
 
 /* Real-time validation for regex flags */
 .vault-organizer-invalid-flags {
   border-color: var(--color-red, #d9534f) !important;
   box-shadow: 0 0 0 2px rgba(217, 83, 79, 0.2) !important;
+}
+
+/* Exclusion Patterns UI styling */
+.vault-organizer-invalid-pattern {
+  border-color: var(--color-orange, #f0ad4e) !important;
+  box-shadow: 0 0 0 2px rgba(240, 173, 78, 0.2) !important;
+}
+
+.vault-organizer-pattern-templates {
+  margin-top: var(--size-4-4);
+  padding: var(--size-4-4);
+  background-color: var(--background-secondary);
+  border-radius: var(--radius-m);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.vault-organizer-templates-heading {
+  margin-top: 0;
+  margin-bottom: var(--size-4-2);
+  font-size: 1em;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+.vault-organizer-template-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-2);
+}
+
+.vault-organizer-template-item {
+  display: flex;
+  align-items: center;
+  padding: var(--size-2-2) var(--size-4-2);
+  background-color: var(--background-primary);
+  border-radius: var(--radius-s);
+  border: 1px solid var(--background-modifier-border);
+  transition: background-color 0.2s ease;
+}
+
+.vault-organizer-template-item:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+.vault-organizer-template-pattern {
+  font-family: var(--font-monospace);
+  font-weight: 600;
+  color: var(--text-accent);
+  white-space: nowrap;
+  margin-right: var(--size-2-1);
+}
+
+.vault-organizer-template-desc {
+  color: var(--text-muted);
+  flex: 1;
+  font-size: 0.9em;
+}
+
+.vault-organizer-template-add-btn {
+  margin-left: auto;
+  padding: var(--size-2-1) var(--size-4-2);
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  font-size: 0.9em;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+.vault-organizer-template-add-btn:hover {
+  background-color: var(--interactive-accent-hover);
+}
+
+.vault-organizer-template-add-btn:active {
+  transform: scale(0.98);
+}
+
+/* Mobile responsive styling for pattern templates */
+body.is-phone .vault-organizer-pattern-templates {
+  padding: var(--size-2-2);
+}
+
+body.is-phone .vault-organizer-template-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--size-2-1);
+}
+
+body.is-phone .vault-organizer-template-add-btn {
+  align-self: stretch;
+  margin-left: 0;
+  margin-top: var(--size-2-1);
 }
