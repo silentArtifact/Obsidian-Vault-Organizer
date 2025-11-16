@@ -959,6 +959,17 @@ export class RuleSettingTab extends PluginSettingTab {
     }
 
     /**
+     * Called when the settings tab is hidden.
+     * Cancels any pending debounced operations to prevent orphaned callbacks.
+     */
+    hide(): void {
+        // Cancel any pending debounced saves to prevent them from firing after tab is closed
+        this.cancelPendingSaveOnly();
+        // Also cancel metadata refresh operations
+        this.debouncedRefreshMetadata.cancel();
+    }
+
+    /**
      * Refreshes validation warnings/errors for all rules in the settings UI.
      * Updates the warning message elements to show:
      * - Invalid regex errors

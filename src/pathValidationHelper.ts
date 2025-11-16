@@ -3,7 +3,6 @@
  * Centralizes duplicate validation logic used across the codebase.
  */
 
-import type { CachedMetadata } from 'obsidian';
 import { validateDestinationPath, validatePath } from './pathSanitization';
 import { substituteVariables } from './variableSubstitution';
 import type { SubstitutionResult } from './variableSubstitution';
@@ -39,7 +38,7 @@ export interface DestinationValidationResult {
 export function validateAndPrepareDestination(
 	destinationTemplate: string,
 	fileName: string,
-	frontmatter: CachedMetadata['frontmatter']
+	frontmatter: Record<string, unknown> | undefined
 ): DestinationValidationResult {
 	const warnings: string[] = [];
 
