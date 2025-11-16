@@ -55,8 +55,25 @@ export class Logger {
 	 * @param context - Optional context object
 	 */
 	static debug(message: string, context?: unknown): void {
-		// Check for development mode (safe for browser environments)
-		const isDev = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
+		// Check for development mode with robust environment detection
+		// Supports both Node.js and browser environments
+		let isDev = false;
+
+		try {
+			// Try to access process.env safely
+			if (typeof process !== 'undefined' && process?.env) {
+				isDev = process.env.NODE_ENV === 'development';
+			}
+		} catch {
+			// If process access fails, assume production
+			isDev = false;
+		}
+
+		// Alternative: check for common development indicators
+		if (!isDev && typeof window !== 'undefined') {
+			isDev = window.location?.hostname === 'localhost' || window.location?.hostname === '127.0.0.1';
+		}
+
 		if (isDev) {
 			console.debug(`${this.PREFIX} ${LogLevel.DEBUG}:`, message, context !== undefined ? context : '');
 		}

@@ -22,15 +22,56 @@ export interface SubstitutionResult {
     hasVariables: boolean;
     /** Variables whose array values were truncated due to depth limit */
     truncated?: string[];
+    /** Invalid variable names that were rejected */
+    invalid?: string[];
 }
 
 /**
- * Extracts variable names from a destination path template.
+ * Maximum length for variable names to prevent memory issues.
+ */
+const MAX_VARIABLE_NAME_LENGTH = 100;
+
+/**
+ * Pattern for valid variable names.
+ * Allows alphanumeric characters, underscores, hyphens, and dots.
+ * Must start with a letter or underscore.
+ * Dots are allowed for accessing nested properties (e.g., "project.name").
+ */
+const VALID_VARIABLE_NAME = /^[a-zA-Z_][a-zA-Z0-9_.-]{0,99}$/;
+
+/**
+ * Validates a variable name for safety and correctness.
+ *
+ * @param name - The variable name to validate
+ * @returns True if valid, false otherwise
+ */
+function isValidVariableName(name: string): boolean {
+    if (!name || name.length === 0) {
+        return false;
+    }
+
+    if (name.length > MAX_VARIABLE_NAME_LENGTH) {
+        return false;
+    }
+
+    // Check for path traversal attempts
+    if (name.includes('..') || name.includes('/') || name.includes('\\')) {
+        return false;
+    }
+
+    // Must match valid identifier pattern
+    return VALID_VARIABLE_NAME.test(name);
+}
+
+/**
+ * Extracts and validates variable names from a destination path template.
+ * Only returns valid variable names that pass security checks.
  *
  * @param template - Path template with {variable} syntax
- * @returns Array of variable names found in the template
+ * @returns Array of validated variable names found in the template
  * @example
  * extractVariables("Projects/{project}/{status}") // ["project", "status"]
+ * extractVariables("Bad/{../etc/passwd}") // [] (invalid variable rejected)
  */
 export function extractVariables(template: string): string[] {
     const regex = /\{([^}]+)\}/g;
@@ -38,7 +79,14 @@ export function extractVariables(template: string): string[] {
     let match;
 
     while ((match = regex.exec(template)) !== null) {
-        variables.push(match[1]);
+        const varName = match[1];
+
+        // Validate variable name before adding
+        if (isValidVariableName(varName)) {
+            variables.push(varName);
+        }
+        // Silently skip invalid variable names
+        // They'll be caught later as "missing" variables
     }
 
     return variables;

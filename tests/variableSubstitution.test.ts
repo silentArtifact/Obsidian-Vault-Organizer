@@ -25,9 +25,10 @@ describe('extractVariables', () => {
         expect(result).toEqual([]);
     });
 
-    it('should handle variables with spaces', () => {
+    it('should reject variables with spaces (invalid)', () => {
+        // Variables with spaces are now rejected for security
         const result = extractVariables('{project name}/{status code}');
-        expect(result).toEqual(['project name', 'status code']);
+        expect(result).toEqual([]);
     });
 
     it('should handle duplicate variables', () => {
@@ -35,9 +36,26 @@ describe('extractVariables', () => {
         expect(result).toEqual(['project', 'project']);
     });
 
-    it('should handle nested braces', () => {
+    it('should reject nested braces (invalid)', () => {
+        // Nested braces are invalid variable names
         const result = extractVariables('{outer{inner}}');
-        expect(result).toEqual(['outer{inner']);
+        expect(result).toEqual([]);
+    });
+
+    it('should handle valid variable names with underscores and hyphens', () => {
+        const result = extractVariables('{project_name}/{status-code}');
+        expect(result).toEqual(['project_name', 'status-code']);
+    });
+
+    it('should reject path traversal attempts', () => {
+        const result = extractVariables('{../etc/passwd}/{..\\windows}');
+        expect(result).toEqual([]);
+    });
+
+    it('should reject very long variable names', () => {
+        const longName = 'a'.repeat(150);
+        const result = extractVariables(`{${longName}}`);
+        expect(result).toEqual([]);
     });
 });
 

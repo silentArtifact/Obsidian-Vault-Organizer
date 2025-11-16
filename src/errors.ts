@@ -197,7 +197,8 @@ export class FileOperationError extends VaultOrganizerError {
 }
 
 /**
- * Categorizes a generic error into a specific error type based on error message patterns.
+ * Categorizes a generic error into a specific error type based on error codes and messages.
+ * Prioritizes error codes over message patterns for more reliable categorization.
  * This is useful for handling errors from Obsidian's API which may not provide specific error types.
  */
 export function categorizeError(
@@ -209,18 +210,24 @@ export function categorizeError(
         const err = error instanceof Error ? error : new Error(String(error));
         const message = err.message.toLowerCase();
 
-        // Permission errors
+        // Extract error code if available (Node.js style errors)
+        const errorCode = 'code' in err ? (err as NodeJS.ErrnoException).code : undefined;
+
+        // Permission errors - check code first, then message
         if (
-		message.includes('permission') ||
-		message.includes('eacces') ||
-		message.includes('eperm') ||
-		message.includes('access denied')
+                errorCode === 'EACCES' ||
+                errorCode === 'EPERM' ||
+                message.includes('permission') ||
+                message.includes('eacces') ||
+                message.includes('eperm') ||
+                message.includes('access denied')
         ) {
                 return new PermissionError(filePath, operation, err);
         }
 
-        // File conflict errors
+        // File conflict errors - check code first, then message
         if (
+                errorCode === 'EEXIST' ||
                 message.includes('already exists') ||
                 message.includes('eexist') ||
                 message.includes('file exists')
@@ -234,7 +241,11 @@ export function categorizeError(
                 );
         }
 
-        if (message.includes('locked') || message.includes('ebusy')) {
+        if (
+                errorCode === 'EBUSY' ||
+                message.includes('locked') ||
+                message.includes('ebusy')
+        ) {
                 return new FileConflictError(
                         filePath,
                         destinationPath || filePath,
@@ -245,6 +256,7 @@ export function categorizeError(
         }
 
         if (
+                errorCode === 'ETXTBSY' ||
                 message.includes('in use') ||
                 message.includes('being used') ||
                 message.includes('etxtbsy')
@@ -258,8 +270,9 @@ export function categorizeError(
                 );
         }
 
-	// Path validation errors
+	// Path validation errors - check code first, then message
 	if (
+		errorCode === 'EINVAL' ||
 		message.includes('invalid path') ||
 		message.includes('invalid character') ||
 		message.includes('einval')
@@ -271,7 +284,11 @@ export function categorizeError(
 		);
 	}
 
-	if (message.includes('path too long') || message.includes('enametoolong')) {
+	if (
+		errorCode === 'ENAMETOOLONG' ||
+		message.includes('path too long') ||
+		message.includes('enametoolong')
+	) {
 		return new InvalidPathError(
 			destinationPath || filePath,
 			'too-long',

@@ -1,5 +1,6 @@
 import { App, TFile } from 'obsidian';
 import { Logger } from './logger';
+import { validateRegexPattern } from './regexValidation';
 
 export type FrontmatterMatchType = 'equals' | 'contains' | 'starts-with' | 'ends-with' | 'regex';
 
@@ -333,9 +334,15 @@ export interface FrontmatterRuleDeserializationResult {
 /**
  * Checks if a given match type requires a non-empty value to function correctly.
  * Match types like 'contains', 'starts-with', and 'ends-with' require a value to match against.
+ * The 'equals' and 'regex' match types can technically work with empty values, though
+ * it's generally not useful.
  *
  * @param matchType - The match type to check
- * @returns true if the match type requires a value, false otherwise
+ * @returns true if the match type requires a non-empty value, false otherwise
+ * @example
+ * requiresValue('contains') // true - can't check if string contains ""
+ * requiresValue('equals') // false - can match empty strings
+ * requiresValue('regex') // false - regex can match empty strings
  */
 export function requiresValue(matchType: FrontmatterMatchType): boolean {
     return matchType === 'contains' || matchType === 'starts-with' || matchType === 'ends-with';
@@ -343,9 +350,14 @@ export function requiresValue(matchType: FrontmatterMatchType): boolean {
 
 /**
  * Validates if a serialized rule has a non-empty value.
+ * Checks both type and content to ensure the value is usable.
  *
  * @param rule - The serialized rule to validate
  * @returns true if the rule has a valid (non-empty) value, false otherwise
+ * @example
+ * hasValidValue({ value: 'test', ... }) // true
+ * hasValidValue({ value: '', ... }) // false
+ * hasValidValue({ value: '   ', ... }) // false - whitespace only
  */
 export function hasValidValue(rule: SerializedFrontmatterRule): boolean {
     return typeof rule.value === 'string' && rule.value.trim().length > 0;
@@ -361,18 +373,35 @@ function deserializeCondition(serialized: SerializedRuleCondition): RuleConditio
     const matchType: FrontmatterMatchType = serialized.matchType ?? (serialized.isRegex ? 'regex' : 'equals');
 
     if (matchType === 'regex') {
-        try {
-            const regex = new RegExp(serialized.value, serialized.flags);
-            return {
-                key: serialized.key,
-                matchType,
-                value: regex,
-                caseInsensitive: serialized.caseInsensitive,
-            };
-        } catch (error) {
-            Logger.warn(`Failed to deserialize regex condition for key "${serialized.key}"`, error);
+        // Validate regex for safety and complexity
+        const validation = validateRegexPattern(serialized.value, serialized.flags);
+        if (!validation.valid) {
+            Logger.warn(
+                `Failed to deserialize regex condition for key "${serialized.key}": ${validation.error}`,
+                serialized.value
+            );
             return undefined;
         }
+
+        if (validation.warnings && validation.warnings.length > 0) {
+            Logger.warn(
+                `Regex condition for key "${serialized.key}" has warnings`,
+                validation.warnings.join('; ')
+            );
+        }
+
+        // Safe to use validation.regex after validation check above
+        if (!validation.regex) {
+            Logger.error('Unexpected: validation succeeded but regex is undefined', serialized.value);
+            return undefined;
+        }
+
+        return {
+            key: serialized.key,
+            matchType,
+            value: validation.regex,
+            caseInsensitive: serialized.caseInsensitive,
+        };
     }
 
     return {
@@ -418,35 +447,57 @@ export function deserializeFrontmatterRules(data: SerializedFrontmatterRule[] = 
         }
 
         if (matchType === 'regex') {
-            try {
-                const regex = new RegExp(rule.value, rule.flags);
-                const parsedRule: FrontmatterRule = {
-                    key: rule.key,
-                    matchType,
-                    value: regex,
-                    destination: rule.destination,
-                    enabled: rule.enabled ?? false,
-                    debug: rule.debug,
-                    caseInsensitive: rule.caseInsensitive,
-                    conditions,
-                    conditionOperator: rule.conditionOperator,
-                    conflictResolution: rule.conflictResolution,
-                };
-                rules.push(parsedRule);
-                successes.push({ index, rule: parsedRule });
-            } catch (error) {
-                const message = error instanceof Error ? error.message : String(error);
+            // Validate regex for safety and complexity
+            const validation = validateRegexPattern(rule.value, rule.flags);
+
+            if (!validation.valid) {
+                const message = validation.error || 'Unknown validation error';
                 const destinationInfo = rule.destination ? ` (destination: "${rule.destination}")` : '';
                 Logger.warn(
                     `Failed to deserialize regex for frontmatter rule "${rule.key}"${destinationInfo}: ${message}. Rule will be ignored.`,
-                    error
+                    rule.value
                 );
                 errors.push({
                     index,
                     message,
                     rule: { ...rule, matchType },
-                    cause: error,
+                    cause: new Error(message),
                 });
+            } else {
+                // Log warnings if present
+                if (validation.warnings && validation.warnings.length > 0) {
+                    Logger.warn(
+                        `Regex for frontmatter rule "${rule.key}" has performance warnings`,
+                        validation.warnings.join('; ')
+                    );
+                }
+
+                // Safe to use validation.regex after validation check above
+                if (!validation.regex) {
+                    const message = 'Unexpected: validation succeeded but regex is undefined';
+                    Logger.error(message, rule.value);
+                    errors.push({
+                        index,
+                        message,
+                        rule: { ...rule, matchType },
+                        cause: new Error(message),
+                    });
+                } else {
+                    const parsedRule: FrontmatterRule = {
+                        key: rule.key,
+                        matchType,
+                        value: validation.regex,
+                        destination: rule.destination,
+                        enabled: rule.enabled ?? false,
+                        debug: rule.debug,
+                        caseInsensitive: rule.caseInsensitive,
+                        conditions,
+                        conditionOperator: rule.conditionOperator,
+                        conflictResolution: rule.conflictResolution,
+                    };
+                    rules.push(parsedRule);
+                    successes.push({ index, rule: parsedRule });
+                }
             }
         } else {
             const parsedRule: FrontmatterRule = {

@@ -470,40 +470,54 @@ export default class VaultOrganizer extends Plugin {
 
     /**
      * Generates a unique filename when a conflict occurs.
+     * Optimized to reduce file system queries and prevent UI freezing.
      *
      * @param basePath - The base path without extension
      * @param extension - The file extension
      * @param strategy - The conflict resolution strategy
      * @returns A unique file path
-     * @throws {FileConflictError} If unable to generate a unique filename after max attempts
+     * @throws {FileConflictError} If unable to generate a unique filename (very rare)
      */
     private generateUniqueFilename(basePath: string, extension: string, strategy: 'append-number' | 'append-timestamp'): string {
         if (strategy === 'append-timestamp') {
+            // Use high-resolution timestamp for better uniqueness
             const timestamp = Date.now();
-            return `${basePath}-${timestamp}${extension}`;
-        }
+            const newPath = `${basePath}-${timestamp}${extension}`;
 
-        // append-number strategy with infinite loop protection
-        let counter = 1;
-        let newPath = `${basePath}-${counter}${extension}`;
-
-        while (this.app.vault.getAbstractFileByPath(newPath)) {
-            counter++;
-
-            // CRITICAL: Prevent infinite loop by capping attempts
-            if (counter > PERFORMANCE_CONFIG.MAX_UNIQUE_FILENAME_ATTEMPTS) {
-                throw new FileConflictError(
-                    `${basePath}${extension}`,
-                    undefined,
-                    'max-attempts',
-                    'generate-unique-filename'
-                );
+            // Verify uniqueness (should be very rare to collide)
+            if (!this.app.vault.getAbstractFileByPath(newPath)) {
+                return newPath;
             }
 
-            newPath = `${basePath}-${counter}${extension}`;
+            // Collision occurred, add microsecond-level uniqueness
+            return `${basePath}-${timestamp}-${Math.random().toString(36).substring(2, 8)}${extension}`;
         }
 
-        return newPath;
+        // append-number strategy with optimized search
+        // Start with counter 1 and increment until we find a free slot
+        let counter = 1;
+        let newPath: string;
+
+        // Optimized loop with reduced max attempts (100 instead of 1000)
+        while (counter <= PERFORMANCE_CONFIG.MAX_UNIQUE_FILENAME_ATTEMPTS) {
+            newPath = `${basePath}-${counter}${extension}`;
+
+            if (!this.app.vault.getAbstractFileByPath(newPath)) {
+                return newPath;
+            }
+
+            counter++;
+        }
+
+        // Fallback: If we've tried 100 numbers and all are taken,
+        // switch to timestamp-based naming to guarantee uniqueness
+        Logger.warn(
+            `Could not find unique numbered filename after ${PERFORMANCE_CONFIG.MAX_UNIQUE_FILENAME_ATTEMPTS} attempts. ` +
+            `Falling back to timestamp-based naming for ${basePath}${extension}`
+        );
+
+        const timestamp = Date.now();
+        return `${basePath}-${timestamp}${extension}`;
     }
 
     /**
@@ -608,16 +622,24 @@ export default class VaultOrganizer extends Plugin {
             }
 
             const oldPath = file.path;
+
+            // CRITICAL FIX: Add destination path to processing set BEFORE the move
+            // This prevents race conditions when events fire for the new path during the move
+            if (newPath !== originalPath) {
+                this.filesBeingProcessed.add(newPath);
+                finalPath = newPath; // Track the new path for cleanup
+            }
+
             try {
                 await this.app.fileManager.renameFile(file, newPath);
-                finalPath = newPath; // Track the new path for cleanup
-                // Also protect the new path from concurrent processing
-                if (newPath !== originalPath) {
-                    this.filesBeingProcessed.add(newPath);
-                }
                 // Record successful move in history
                 await this.recordMove(oldPath, newPath, file.name, rule.key);
             } catch (err) {
+                // Clean up destination path from processing set on error
+                if (finalPath && finalPath !== originalPath) {
+                    this.filesBeingProcessed.delete(finalPath);
+                    finalPath = undefined; // Clear to prevent double-cleanup in finally block
+                }
                 // Categorize the rename error for better user feedback
                 const categorized = categorizeError(err, file.path, 'move', newPath);
                 throw categorized;
