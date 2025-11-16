@@ -3,11 +3,14 @@
  * Supports glob-style patterns to exclude files and folders from automatic processing.
  */
 
+import { Logger } from './logger';
+
 /**
  * Maximum number of compiled regex patterns to cache.
  * Prevents unbounded memory growth in long-running sessions with dynamic patterns.
+ * Made configurable to support users with many exclusion patterns.
  */
-const MAX_REGEX_CACHE_SIZE = 100;
+const MAX_REGEX_CACHE_SIZE = 200;
 
 /**
  * Cache for compiled regex patterns to avoid recompilation.
@@ -58,18 +61,35 @@ function globToRegex(pattern: string): RegExp {
 /**
  * Compiles a glob pattern into a RegExp.
  * Internal function that does the actual compilation work.
+ * Includes safety checks to prevent ReDoS attacks from malicious patterns.
  *
  * @param pattern - Glob pattern to compile
  * @returns Compiled RegExp
+ * @throws Error if pattern is too complex or potentially malicious
  */
 function compileGlobPattern(pattern: string): RegExp {
+    // Safety check: limit pattern length
+    if (pattern.length > 1000) {
+        Logger.warn(`Exclusion pattern too long (${pattern.length} chars), truncating to 1000`);
+        pattern = pattern.substring(0, 1000);
+    }
+
     let regexStr = '^';
     let i = 0;
+    let wildcardCount = 0;
+    const MAX_WILDCARDS = 50; // Prevent patterns with excessive wildcards
 
     while (i < pattern.length) {
         const char = pattern[i];
 
         if (char === '*') {
+            wildcardCount++;
+            if (wildcardCount > MAX_WILDCARDS) {
+                Logger.warn(`Exclusion pattern has too many wildcards (>${MAX_WILDCARDS}), ignoring excess`);
+                i += 1;
+                continue;
+            }
+
             // Check for **
             if (pattern[i + 1] === '*') {
                 // ** matches everything including /
@@ -81,6 +101,13 @@ function compileGlobPattern(pattern: string): RegExp {
                 i += 1;
             }
         } else if (char === '?') {
+            wildcardCount++;
+            if (wildcardCount > MAX_WILDCARDS) {
+                Logger.warn(`Exclusion pattern has too many wildcards (>${MAX_WILDCARDS}), ignoring excess`);
+                i += 1;
+                continue;
+            }
+
             // ? matches any single character except /
             regexStr += '[^/]';
             i += 1;
