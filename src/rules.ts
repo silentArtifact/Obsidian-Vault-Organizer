@@ -85,13 +85,13 @@ function testCondition(condition: RuleCondition, frontmatter: Record<string, unk
             return false;
         }
         const regex = condition.value;
-        // Reset lastIndex before testing to prevent state issues with global flags
-        regex.lastIndex = 0;
+
         return values.some(item => {
             const valueStr = String(item);
-            // Reset again for each test to ensure clean state
-            regex.lastIndex = 0;
-            return regex.test(valueStr);
+            // Clone the regex to prevent state leakage between tests
+            // This is important for global and sticky flags
+            const clonedRegex = new RegExp(regex.source, regex.flags);
+            return clonedRegex.test(valueStr);
         });
     }
 
@@ -150,7 +150,7 @@ export function matchFrontmatter(
         const primaryMatch = testCondition(primaryCondition, cacheFrontmatter);
 
         // If no additional conditions, return primary match result
-        if (!rule.conditions || rule.conditions.length === 0) {
+        if (!rule.conditions?.length) {
             return primaryMatch;
         }
 
