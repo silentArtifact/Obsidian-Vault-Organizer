@@ -42,7 +42,6 @@ export default tseslint.config(
 			'version-bump.mjs',
 			'tests/**/*.ts',
 			'__mocks__/**/*.ts',
-			'PhiDeltaPhi/',
 		],
 	}
 );
