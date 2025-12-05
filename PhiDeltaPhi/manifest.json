@@ -1,0 +1,13 @@
+{
+    "display_name": "Phi Delta Phi",
+    "loading_order": 1,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "SilentArtifact",
+    "version": "0.2.0",
+    "homePage": "",
+    "auto_update": false,
+    "description": "A narrative game system for SillyTavern using Forged in the Dark mechanics. Beats are purchased outcomes - dice shape the journey, not the destination."
+}

@@ -1,0 +1,128 @@
+{
+    "_meta": {
+        "version": "0.2.0",
+        "description": "Random scene prompts for ambient scenes when no beat is queued"
+    },
+    "seeds": [
+        {
+            "id": "morning_kitchen",
+            "prompt": "Morning in the Phi Delta Phi kitchen. The coffee maker gurgles. Sunlight slants through the windows. Someone else is already awake.",
+            "period": "morning",
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "afternoon_common",
+            "prompt": "The common room in the afternoon. Someone's left the TV on. A sister or two might be around, doing their own thing.",
+            "period": "afternoon",
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "evening_porch",
+            "prompt": "Evening on the porch. The day's heat is fading. You can hear voices from inside, but out here it's quiet.",
+            "period": "evening",
+            "flags": { "required": [], "forbidden": [] }
+        },
+        {
+            "id": "night_hallway",
+            "prompt": "Late at night. The house is mostly quiet, but not entirely. Floorboards creak. Someone's light is still on under their door.",
+            "period": "night",
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "laundry_room",
+            "prompt": "The laundry room. Machines rumble. It's one of the few places in the house you can have a conversation without being overheard.",
+            "period": null,
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "backyard",
+            "prompt": "The backyard. Someone left a volleyball net up. A forgotten towel on a lawn chair. Space to breathe.",
+            "period": null,
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "grocery_run",
+            "prompt": "Someone needs to make a grocery run. You could use the air, or the company.",
+            "period": null,
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "rain_day",
+            "prompt": "Rain drums against the windows. Everyone's stuck inside. The house feels smaller, closer.",
+            "period": null,
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "sunday_brunch",
+            "prompt": "Sunday brunch tradition. Someone's cooking. The smell of bacon fills the house. It's one of the rare moments everyone's in the same room.",
+            "period": "morning",
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "movie_night",
+            "prompt": "Someone declared it movie night. The couch is too small for everyone. Someone's making popcorn.",
+            "period": "evening",
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "study_break",
+            "prompt": "Midterms are coming. The library is full of stressed sisters. Maybe they need a distraction.",
+            "period": null,
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "package_delivery",
+            "prompt": "A package arrived. It's addressed to one of the sisters. You could bring it to her.",
+            "period": null,
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "broken_appliance",
+            "prompt": "Something's broken. The dishwasher, maybe. Or the AC. Someone's frustrated about it.",
+            "period": null,
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "late_arrival",
+            "prompt": "Someone came home late last night. The rumor mill is spinning up. You hear whispers.",
+            "period": "morning",
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "workout",
+            "prompt": "The house has a small gym in the basement. Someone's already down there, or about to be.",
+            "period": null,
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "quiet_moment",
+            "prompt": "A rare quiet moment. The house feels empty, even though you know it's not. Time to think.",
+            "period": null,
+            "flags": { "required": [], "forbidden": [] }
+        },
+        {
+            "id": "phone_call_overheard",
+            "prompt": "You didn't mean to overhear. But the walls are thin, and someone's having an intense phone call.",
+            "period": null,
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "visitor",
+            "prompt": "Someone's at the door. A visitor for one of the sisters. The energy in the house shifts.",
+            "period": null,
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "garden_work",
+            "prompt": "Someone's trying to save the garden out back. It's not going well. They could use help, or company.",
+            "period": "afternoon",
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        },
+        {
+            "id": "power_outage",
+            "prompt": "The power's out. Candles and flashlights. The house feels different in the dark.",
+            "period": "evening",
+            "flags": { "required": ["house_tour_done"], "forbidden": [] }
+        }
+    ]
+}
