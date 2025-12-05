@@ -1,0 +1,392 @@
+{
+    "_meta": {
+        "version": "0.2.0",
+        "description": "Story beats with guaranteed outcomes and variable effects"
+    },
+
+    "jackie_tennis": {
+        "name": "Tennis with Jackie",
+        "description": "She needs to burn off energy. By the end, she'll open up about something real.",
+        "cost": 2,
+        "route": "jackie",
+        "prerequisites": {
+            "flags": { "required": ["house_tour_done"], "forbidden": [] },
+            "relationships": { "jackie": { "min": "warm" } },
+            "time": { "dayMin": 3 }
+        },
+
+        "setup": "Jackie's already on the court when you arrive, bouncing a ball off her racket with aggressive rhythm. 'Finally. I need to hit something and you're it.'",
+
+        "guaranteed": {
+            "narrativeDirection": "By the end of this scene, Jackie drops her guard and says something real. Maybe it's about the bracelet situation, maybe it's about her feelings about having Matt in the house, maybe it's something else she's been deflecting. But the walls come down, at least a crack. This happens regardless of how the tennis match goes—winning or losing, fighting or bonding, she ends up vulnerable.",
+            "outcomes": {
+                "flags": ["jackie_opened_up"],
+                "relationships": { "jackie": 1 },
+                "presence": 2
+            }
+        },
+
+        "variables": {
+            "questions": [
+                "Did Matt hold his own on the court (won at least one set or made her work for it)?",
+                "Did they have a fight or heated argument during the scene?",
+                "Did anyone else witness Jackie's vulnerable moment?"
+            ],
+            "effectMapping": ["held_own", "had_fight", "was_witnessed"],
+            "effects": {
+                "held_own": {
+                    "style": 1,
+                    "flags": ["impressed_jackie_physically"]
+                },
+                "had_fight": {
+                    "heat": 1,
+                    "flags": ["jackie_tennis_fight"]
+                },
+                "was_witnessed": {
+                    "flags": ["jackie_vulnerable_public"],
+                    "heat": 1
+                }
+            }
+        },
+
+        "wiEntryId": "beat_jackie_tennis"
+    },
+
+    "dakota_blowup": {
+        "name": "The Breaking Point",
+        "description": "You and Dakota have been circling something. Tonight it explodes.",
+        "cost": 3,
+        "route": "dakota",
+        "prerequisites": {
+            "flags": { "required": ["dakota_tension_building"], "forbidden": [] },
+            "relationships": { "dakota": { "min": "neutral" } },
+            "time": { "dayMin": 7 }
+        },
+
+        "setup": "You find Dakota in the kitchen at 1 AM. She looks up when you enter. Something in her expression says this has been coming for a while.",
+
+        "guaranteed": {
+            "narrativeDirection": "This scene ends with a real fight between Matt and Dakota. Not bickering—an actual blow-up where things get said that can't be unsaid. Someone storms out. The relationship takes visible damage. This is a DRAMA beat—the player purchased this conflict intentionally. Make it hurt, make it real, make it matter.",
+            "outcomes": {
+                "flags": ["dakota_blowup_happened"],
+                "relationships": { "dakota": -1 },
+                "damage": 1,
+                "presence": 3,
+                "unlocks": ["dakota_reconciliation", "dakota_cold_distance"]
+            }
+        },
+
+        "variables": {
+            "questions": [
+                "Did Matt say the crueler thing (versus Dakota saying it)?",
+                "Did Jackie try to intervene?",
+                "Did Matt leave the house after the fight?"
+            ],
+            "effectMapping": ["matt_crueler", "jackie_intervened", "matt_left"],
+            "effects": {
+                "matt_crueler": {
+                    "damage": 1,
+                    "flags": ["matt_said_worse_thing"]
+                },
+                "jackie_intervened": {
+                    "relationships": { "jackie": 1 },
+                    "flags": ["jackie_saw_fight"]
+                },
+                "matt_left": {
+                    "heat": 1,
+                    "flags": ["left_after_dakota_fight"]
+                }
+            }
+        },
+
+        "wiEntryId": "beat_dakota_blowup"
+    },
+
+    "emma_coffee_1": {
+        "name": "Morning Coffee with Emma",
+        "description": "She's alone in the kitchen. She looks like she could use company.",
+        "cost": 2,
+        "route": "emma",
+        "prerequisites": {
+            "flags": { "required": [], "forbidden": ["emma_opened_up"] },
+            "relationships": { "emma": { "min": "neutral" } },
+            "time": { "periods": ["morning"] }
+        },
+
+        "setup": "Emma's at the kitchen counter, hands wrapped around a mug that's gone cold. She looks up when you enter—something flickers across her face before the smile settles in.",
+
+        "guaranteed": {
+            "narrativeDirection": "By the end of this scene, Emma shares something personal. Not necessarily deep trauma—but something real beneath the 'house mom' surface. Maybe she mentions being tired. Maybe she admits she doesn't know what she wants. Maybe she talks about her sister. The specific topic can emerge naturally, but she stops performing 'fine' for at least a moment.",
+            "outcomes": {
+                "flags": ["emma_opened_up"],
+                "relationships": { "emma": 1 },
+                "connection": 1,
+                "presence": 2
+            }
+        },
+
+        "variables": {
+            "questions": [
+                "Did Matt mostly listen (versus trying to fix or advise)?",
+                "Did Emma cry or nearly cry?",
+                "Were they interrupted by another sister?"
+            ],
+            "effectMapping": ["matt_listened", "emma_emotional", "were_interrupted"],
+            "effects": {
+                "matt_listened": {
+                    "flags": ["good_listener_emma"],
+                    "style": 1
+                },
+                "emma_emotional": {
+                    "flags": ["emma_cried"],
+                    "connection": 1
+                },
+                "were_interrupted": {
+                    "heat": 1,
+                    "flags": ["emma_moment_interrupted"]
+                }
+            }
+        },
+
+        "wiEntryId": "beat_emma_coffee_1"
+    },
+
+    "house_tour": {
+        "name": "The Grand Tour",
+        "description": "Someone offers to show you around. First impressions matter.",
+        "cost": 1,
+        "route": null,
+        "prerequisites": {
+            "flags": { "required": [], "forbidden": ["house_tour_done"] },
+            "time": { "dayMin": 1, "dayMax": 2 }
+        },
+
+        "setup": "The sorority house looms ahead. Someone's coming to meet you at the door.",
+
+        "guaranteed": {
+            "narrativeDirection": "Matt gets a tour of Phi Delta Phi. He meets at least three sisters, sees the common areas, and gets a sense of the house dynamics. By the end, he has a place to sleep and knows where the bathroom is.",
+            "outcomes": {
+                "flags": ["house_tour_done", "met_sisters"],
+                "presence": 1
+            }
+        },
+
+        "variables": {
+            "questions": [
+                "Did Matt make a strong first impression on anyone?",
+                "Did Matt accidentally see or overhear something he shouldn't have?",
+                "Did the tour guide seem genuinely welcoming (versus just polite)?"
+            ],
+            "effectMapping": ["strong_impression", "saw_something", "genuine_welcome"],
+            "effects": {
+                "strong_impression": {
+                    "style": 1,
+                    "flags": ["memorable_arrival"]
+                },
+                "saw_something": {
+                    "flags": ["overheard_something"],
+                    "heat": 1
+                },
+                "genuine_welcome": {
+                    "connection": 1
+                }
+            }
+        },
+
+        "wiEntryId": "beat_house_tour"
+    },
+
+    "holly_studio": {
+        "name": "Holly's Art Space",
+        "description": "Holly invites you to see her studio. She doesn't show this to everyone.",
+        "cost": 2,
+        "route": "holly",
+        "prerequisites": {
+            "flags": { "required": ["house_tour_done"], "forbidden": ["holly_studio_visited"] },
+            "relationships": { "holly": { "min": "warm" } },
+            "time": { "periods": ["afternoon", "evening"] }
+        },
+
+        "setup": "Holly catches you in the hallway. 'Hey. You want to see something?' She's already walking before you answer, toward the stairs to the attic.",
+
+        "guaranteed": {
+            "narrativeDirection": "Holly shows Matt her art—really shows him, not the sanitized portfolio version. By scene end, Matt has seen something personal in her work, and Holly has watched him react to it. The vulnerability is mutual: she showed him something real, and he can't pretend he didn't see it.",
+            "outcomes": {
+                "flags": ["holly_studio_visited", "saw_holly_art"],
+                "relationships": { "holly": 1 },
+                "connection": 1,
+                "presence": 2
+            }
+        },
+
+        "variables": {
+            "questions": [
+                "Did Matt have a genuine emotional reaction to her art?",
+                "Did Matt ask questions that showed he was really paying attention?",
+                "Did Holly explain something she's never told anyone?"
+            ],
+            "effectMapping": ["emotional_reaction", "good_questions", "shared_secret"],
+            "effects": {
+                "emotional_reaction": {
+                    "flags": ["moved_by_holly_art"],
+                    "connection": 1
+                },
+                "good_questions": {
+                    "style": 1,
+                    "relationships": { "holly": 1 }
+                },
+                "shared_secret": {
+                    "flags": ["holly_secret_shared"],
+                    "connection": 1
+                }
+            }
+        },
+
+        "wiEntryId": "beat_holly_studio"
+    },
+
+    "nina_late_night": {
+        "name": "Midnight with Nina",
+        "description": "You find her in the common room at 2 AM. She's not sleeping either.",
+        "cost": 2,
+        "route": "nina",
+        "prerequisites": {
+            "flags": { "required": ["house_tour_done"], "forbidden": [] },
+            "relationships": { "nina": { "min": "neutral" } },
+            "time": { "periods": ["night"] }
+        },
+
+        "setup": "The house is quiet. You came down for water and found Nina on the couch, laptop open but forgotten, staring at nothing. She looks up when you appear.",
+
+        "guaranteed": {
+            "narrativeDirection": "Nina and Matt have a real conversation—the kind that only happens at 2 AM when everyone's guards are down. She reveals something about why she's awake, what she's worried about, or what she actually thinks beneath her usual deflection. The night makes people honest.",
+            "outcomes": {
+                "flags": ["nina_night_talk"],
+                "relationships": { "nina": 1 },
+                "presence": 2
+            }
+        },
+
+        "variables": {
+            "questions": [
+                "Did Matt share something personal in return?",
+                "Did they stay up until dawn?",
+                "Did Nina laugh—really laugh—at something Matt said?"
+            ],
+            "effectMapping": ["matt_shared", "until_dawn", "made_laugh"],
+            "effects": {
+                "matt_shared": {
+                    "flags": ["opened_up_to_nina"],
+                    "connection": 1
+                },
+                "until_dawn": {
+                    "flags": ["dawn_with_nina"],
+                    "heat": 1
+                },
+                "made_laugh": {
+                    "style": 1,
+                    "relationships": { "nina": 1 }
+                }
+            }
+        },
+
+        "wiEntryId": "beat_nina_late_night"
+    },
+
+    "yuki_study_session": {
+        "name": "Study Session with Yuki",
+        "description": "She needs help with something. Or maybe she's the one helping you.",
+        "cost": 2,
+        "route": "yuki",
+        "prerequisites": {
+            "flags": { "required": ["house_tour_done"], "forbidden": [] },
+            "relationships": { "yuki": { "min": "neutral" } },
+            "time": { "periods": ["afternoon", "evening"] }
+        },
+
+        "setup": "Yuki's set up a study fort in the library—textbooks spread in a precise grid, color-coded highlighters lined up like soldiers. She glances up when you enter. 'You can sit. Just... don't touch the system.'",
+
+        "guaranteed": {
+            "narrativeDirection": "Through the pretense of studying, Yuki lets Matt see past her meticulous exterior. Maybe it's frustration at something that won't make sense. Maybe it's an offhand comment about pressure. Maybe she just relaxes enough to be awkward instead of controlled. The academic armor develops a crack.",
+            "outcomes": {
+                "flags": ["yuki_study_session"],
+                "relationships": { "yuki": 1 },
+                "presence": 2
+            }
+        },
+
+        "variables": {
+            "questions": [
+                "Did Matt actually help with the studying (versus just being present)?",
+                "Did Yuki get frustrated or show stress?",
+                "Did they end up talking about something other than academics?"
+            ],
+            "effectMapping": ["actually_helped", "showed_stress", "non_academic_talk"],
+            "effects": {
+                "actually_helped": {
+                    "style": 1,
+                    "flags": ["helped_yuki_study"]
+                },
+                "showed_stress": {
+                    "flags": ["yuki_pressure_visible"],
+                    "connection": 1
+                },
+                "non_academic_talk": {
+                    "relationships": { "yuki": 1 },
+                    "flags": ["yuki_opened_up"]
+                }
+            }
+        },
+
+        "wiEntryId": "beat_yuki_study"
+    },
+
+    "dakota_reconciliation": {
+        "name": "After the Storm",
+        "description": "Dakota wants to talk. About last time.",
+        "cost": 2,
+        "route": "dakota",
+        "prerequisites": {
+            "flags": { "required": ["dakota_blowup_happened"], "forbidden": ["dakota_reconciled", "dakota_cold_chosen"] },
+            "relationships": { "dakota": { "min": "cold" } },
+            "time": { "dayMin": 9 }
+        },
+
+        "setup": "A note under your door, in Dakota's handwriting: 'Porch. 10 minutes. If you want.' No signature.",
+
+        "guaranteed": {
+            "narrativeDirection": "Dakota and Matt actually talk about what happened. Not necessarily apologize—but acknowledge it. By scene end, they've either started rebuilding something or consciously decided not to. Either way, the silence is broken.",
+            "outcomes": {
+                "flags": ["dakota_reconciled"],
+                "relationships": { "dakota": 1 },
+                "presence": 3
+            }
+        },
+
+        "variables": {
+            "questions": [
+                "Did Matt apologize first?",
+                "Did Dakota apologize first?",
+                "Did they reach any kind of understanding about what went wrong?"
+            ],
+            "effectMapping": ["matt_apologized", "dakota_apologized", "mutual_understanding"],
+            "effects": {
+                "matt_apologized": {
+                    "flags": ["matt_apologized_dakota"],
+                    "connection": 1
+                },
+                "dakota_apologized": {
+                    "flags": ["dakota_apologized"],
+                    "relationships": { "dakota": 1 }
+                },
+                "mutual_understanding": {
+                    "flags": ["dakota_matt_understanding"],
+                    "connection": 1,
+                    "style": 1
+                }
+            }
+        },
+
+        "wiEntryId": "beat_dakota_reconciliation"
+    }
+}
