@@ -12,50 +12,59 @@ import type { CachedMetadata } from 'obsidian';
 describe('extractVariables', () => {
     it('should extract single variable', () => {
         const result = extractVariables('Projects/{project}');
-        expect(result).toEqual(['project']);
+        expect(result.variables).toEqual(['project']);
+        expect(result.invalid).toEqual([]);
     });
 
     it('should extract multiple variables', () => {
         const result = extractVariables('Projects/{project}/{status}');
-        expect(result).toEqual(['project', 'status']);
+        expect(result.variables).toEqual(['project', 'status']);
+        expect(result.invalid).toEqual([]);
     });
 
-    it('should return empty array when no variables', () => {
+    it('should return empty arrays when no variables', () => {
         const result = extractVariables('Projects/Fixed');
-        expect(result).toEqual([]);
+        expect(result.variables).toEqual([]);
+        expect(result.invalid).toEqual([]);
     });
 
-    it('should reject variables with spaces (invalid)', () => {
+    it('should reject variables with spaces and track them as invalid', () => {
         // Variables with spaces are now rejected for security
         const result = extractVariables('{project name}/{status code}');
-        expect(result).toEqual([]);
+        expect(result.variables).toEqual([]);
+        expect(result.invalid).toEqual(['project name', 'status code']);
     });
 
     it('should handle duplicate variables', () => {
         const result = extractVariables('{project}/{project}');
-        expect(result).toEqual(['project', 'project']);
+        expect(result.variables).toEqual(['project', 'project']);
+        expect(result.invalid).toEqual([]);
     });
 
-    it('should reject nested braces (invalid)', () => {
+    it('should reject nested braces and track as invalid', () => {
         // Nested braces are invalid variable names
         const result = extractVariables('{outer{inner}}');
-        expect(result).toEqual([]);
+        expect(result.variables).toEqual([]);
+        expect(result.invalid).toEqual(['outer{inner']);
     });
 
     it('should handle valid variable names with underscores and hyphens', () => {
         const result = extractVariables('{project_name}/{status-code}');
-        expect(result).toEqual(['project_name', 'status-code']);
+        expect(result.variables).toEqual(['project_name', 'status-code']);
+        expect(result.invalid).toEqual([]);
     });
 
-    it('should reject path traversal attempts', () => {
+    it('should reject path traversal attempts and track as invalid', () => {
         const result = extractVariables('{../etc/passwd}/{..\\windows}');
-        expect(result).toEqual([]);
+        expect(result.variables).toEqual([]);
+        expect(result.invalid).toEqual(['../etc/passwd', '..\\windows']);
     });
 
-    it('should reject very long variable names', () => {
+    it('should reject very long variable names and track as invalid', () => {
         const longName = 'a'.repeat(150);
         const result = extractVariables(`{${longName}}`);
-        expect(result).toEqual([]);
+        expect(result.variables).toEqual([]);
+        expect(result.invalid).toEqual([longName]);
     });
 });
 
@@ -238,11 +247,20 @@ describe('substituteVariables', () => {
         expect(result.substitutedPath).toBe('Projects/Website/Folder');
     });
 
-    it('should handle variables with special regex characters', () => {
+    it('should handle variables with special regex characters (dots for nested access)', () => {
+        // Variables with dots now use nested property access
         const result = substituteVariables('Projects/{project.name}', {
-            'project.name': 'Website',
+            project: { name: 'Website' },
         });
         expect(result.substitutedPath).toBe('Projects/Website');
+    });
+
+    it('should handle variables with underscores and hyphens', () => {
+        const result = substituteVariables('Projects/{project_name}/{file-type}', {
+            project_name: 'Website',
+            'file-type': 'Document',
+        });
+        expect(result.substitutedPath).toBe('Projects/Website/Document');
     });
 
     it('should handle duplicate variable references', () => {
@@ -260,6 +278,42 @@ describe('substituteVariables', () => {
             project: 'Daily Notes',
         });
         expect(result.substitutedPath).toBe('Archive/2024/January/15/Daily Notes');
+    });
+
+    it('should handle nested property access with dot notation', () => {
+        const result = substituteVariables('Authors/{author.name}', {
+            author: { name: 'John Doe', email: 'john@example.com' },
+        });
+        expect(result.substitutedPath).toBe('Authors/John Doe');
+        expect(result.substituted).toEqual(['author.name']);
+        expect(result.missing).toEqual([]);
+    });
+
+    it('should handle deeply nested property access', () => {
+        const result = substituteVariables('Data/{meta.location.city}', {
+            meta: { location: { city: 'New York', country: 'USA' } },
+        });
+        expect(result.substitutedPath).toBe('Data/New York');
+    });
+
+    it('should report missing nested property', () => {
+        const result = substituteVariables('Authors/{author.name}', {
+            author: { email: 'john@example.com' },
+        });
+        expect(result.substitutedPath).toBe('Authors');
+        expect(result.missing).toEqual(['author.name']);
+    });
+
+    it('should report missing parent property', () => {
+        const result = substituteVariables('Authors/{author.name}', {});
+        expect(result.substitutedPath).toBe('Authors');
+        expect(result.missing).toEqual(['author.name']);
+    });
+
+    it('should track invalid variable names in result', () => {
+        const result = substituteVariables('Projects/{../evil}/{good}', { good: 'Valid' });
+        expect(result.substitutedPath).toBe('Projects/{../evil}/Valid');
+        expect(result.invalid).toEqual(['../evil']);
     });
 });
 

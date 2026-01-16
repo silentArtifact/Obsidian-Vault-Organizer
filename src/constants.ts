@@ -84,7 +84,8 @@ export const SETTINGS_UI = {
 
 	WARNINGS: {
 		INVALID_REGEX: (message: string) => `Invalid regular expression: ${message}`,
-		VALUE_REQUIRED: 'Value is required for contains/starts-with/ends-with rules.'
+		VALUE_REQUIRED: 'Value is required for contains/starts-with/ends-with rules.',
+		KEY_REQUIRED: 'Frontmatter key is required for the rule to match.'
 	}
 } as const;
 
