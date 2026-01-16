@@ -55,7 +55,8 @@ export const SETTINGS_UI = {
 		CONFLICT_RESOLUTION: 'How to handle file conflicts at destination',
 		CONDITION_OPERATOR: 'How to combine multiple conditions (AND/OR)',
 		ADD_CONDITION: 'Add another condition to this rule',
-		EXCLUSION_PATTERN: 'Glob pattern (e.g., Templates/**, *.excalidraw)'
+		EXCLUSION_PATTERN: 'Glob pattern (e.g., Templates/**, *.excalidraw)',
+		DUPLICATE_RULE: 'Create a copy of this rule'
 	},
 
 	PLACEHOLDERS: {
@@ -73,7 +74,8 @@ export const SETTINGS_UI = {
 		TEST_ALL_RULES: 'Test All Rules',
 		ADD_CONDITION: '+',
 		REMOVE_CONDITION: 'Remove Condition',
-		ADD_EXCLUSION: 'Add Pattern'
+		ADD_EXCLUSION: 'Add Pattern',
+		DUPLICATE: 'Duplicate'
 	},
 
 	LABELS: {
@@ -86,6 +88,10 @@ export const SETTINGS_UI = {
 		INVALID_REGEX: (message: string) => `Invalid regular expression: ${message}`,
 		VALUE_REQUIRED: 'Value is required for contains/starts-with/ends-with rules.',
 		KEY_REQUIRED: 'Frontmatter key is required for the rule to match.'
+	},
+
+	SUCCESS: {
+		RULE_VALID: 'Rule is valid and ready to use'
 	}
 } as const;
 

@@ -8,6 +8,7 @@ import { RuleTagPickerModal, RuleFrontmatterKeyPickerModal, TestAllRulesModal } 
 import { SETTINGS_UI } from '../constants';
 import { DEBOUNCE_CONFIG } from '../config';
 import { validateExclusionPattern } from '../exclusionPatterns';
+import { extractVariables } from '../variableSubstitution';
 
 /**
  * Validates regex flags to ensure they contain only valid characters.
@@ -275,24 +276,31 @@ export class RuleSettingTab extends PluginSettingTab {
                 const ruleRequiresValue = requiresValue(matchType);
                 const hasValue = currentRule ? hasValidValue(currentRule) : false;
                 const hasKey = currentRule ? (typeof currentRule.key === 'string' && currentRule.key.trim().length > 0) : false;
+                const hasDestination = currentRule ? (typeof currentRule.destination === 'string' && currentRule.destination.trim().length > 0) : false;
 
                 if (error) {
                     warningEl.classList.add('vault-organizer-rule-error');
-                    warningEl.classList.remove('vault-organizer-rule-warning');
+                    warningEl.classList.remove('vault-organizer-rule-warning', 'vault-organizer-rule-success');
                     warningEl.textContent = SETTINGS_UI.WARNINGS.INVALID_REGEX(error.message);
                     warningEl.style.display = '';
                 } else if (!hasKey) {
                     warningEl.classList.add('vault-organizer-rule-warning');
-                    warningEl.classList.remove('vault-organizer-rule-error');
+                    warningEl.classList.remove('vault-organizer-rule-error', 'vault-organizer-rule-success');
                     warningEl.textContent = SETTINGS_UI.WARNINGS.KEY_REQUIRED;
                     warningEl.style.display = '';
                 } else if (ruleRequiresValue && !hasValue) {
                     warningEl.classList.add('vault-organizer-rule-warning');
-                    warningEl.classList.remove('vault-organizer-rule-error');
+                    warningEl.classList.remove('vault-organizer-rule-error', 'vault-organizer-rule-success');
                     warningEl.textContent = SETTINGS_UI.WARNINGS.VALUE_REQUIRED;
                     warningEl.style.display = '';
-                } else {
+                } else if (hasKey && hasDestination) {
+                    // Show success indicator when rule is complete and valid
+                    warningEl.classList.add('vault-organizer-rule-success');
                     warningEl.classList.remove('vault-organizer-rule-warning', 'vault-organizer-rule-error');
+                    warningEl.textContent = SETTINGS_UI.SUCCESS.RULE_VALID;
+                    warningEl.style.display = '';
+                } else {
+                    warningEl.classList.remove('vault-organizer-rule-warning', 'vault-organizer-rule-error', 'vault-organizer-rule-success');
                     warningEl.textContent = '';
                     warningEl.style.display = 'none';
                 }
@@ -364,6 +372,40 @@ export class RuleSettingTab extends PluginSettingTab {
                             this.scheduleSaveOnly();
                         });
                     }));
+            // Destination preview element
+            const destinationPreviewEl = document.createElement('div');
+            destinationPreviewEl.classList.add('vault-organizer-destination-preview');
+            destinationPreviewEl.style.display = 'none';
+
+            const updateDestinationPreview = (destination: string) => {
+                const trimmed = destination.trim();
+                if (!trimmed) {
+                    destinationPreviewEl.style.display = 'none';
+                    return;
+                }
+
+                const { variables } = extractVariables(trimmed);
+                if (variables.length === 0) {
+                    destinationPreviewEl.style.display = 'none';
+                    return;
+                }
+
+                // Show preview with variable info
+                destinationPreviewEl.innerHTML = '';
+                const labelSpan = document.createElement('span');
+                labelSpan.className = 'vault-organizer-destination-preview-label';
+                labelSpan.textContent = 'Variables: ';
+                destinationPreviewEl.appendChild(labelSpan);
+
+                const varsText = document.createTextNode(variables.map(v => `{${v}}`).join(', '));
+                destinationPreviewEl.appendChild(varsText);
+
+                destinationPreviewEl.style.display = '';
+            };
+
+            // Initialize preview with current value
+            updateDestinationPreview(rule.destination);
+
             setting.addText(text =>
                 text
                     .setPlaceholder(SETTINGS_UI.PLACEHOLDERS.DESTINATION)
@@ -374,8 +416,14 @@ export class RuleSettingTab extends PluginSettingTab {
                             return;
                         }
                         currentRule.destination = value;
+                        updateDestinationPreview(value);
                         this.scheduleSaveOnly();
+                        refreshWarning();
                     }));
+
+            // Append preview after the setting
+            setting.settingEl.appendChild(destinationPreviewEl);
+
             let flagsTextComponent: TextComponent | undefined;
             let caseInsensitiveToggleComponent: ToggleComponent | undefined;
             const updateRegexControlsVisibility = () => {
@@ -551,6 +599,34 @@ export class RuleSettingTab extends PluginSettingTab {
                             console.error('Settings save error:', err);
                             // Revert the change
                             currentRule.conditions.pop();
+                        }
+                    }));
+
+            // Duplicate rule button
+            setting.addButton(btn =>
+                btn
+                    .setButtonText(SETTINGS_UI.BUTTONS.DUPLICATE)
+                    .setTooltip(SETTINGS_UI.TOOLTIPS.DUPLICATE_RULE)
+                    .onClick(async () => {
+                        const currentRule = this.plugin.settings.rules[index];
+                        if (!currentRule) {
+                            return;
+                        }
+                        // Create a deep copy of the rule
+                        const duplicatedRule = JSON.parse(JSON.stringify(currentRule));
+                        // Start disabled so user can review before activating
+                        duplicatedRule.enabled = false;
+                        // Insert after the current rule
+                        this.plugin.settings.rules.splice(index + 1, 0, duplicatedRule);
+                        this.cancelPendingSaveOnly();
+                        try {
+                            await this.plugin.saveSettingsWithoutReorganizing();
+                            this.display();
+                        } catch (err) {
+                            new Notice('Failed to save settings. Rule was not duplicated.');
+                            console.error('Settings save error:', err);
+                            // Revert the change
+                            this.plugin.settings.rules.splice(index + 1, 1);
                         }
                     }));
 
@@ -820,26 +896,7 @@ export class RuleSettingTab extends PluginSettingTab {
                         }
                     }));
 
-        new Setting(containerEl)
-            .addButton(btn =>
-                btn
-                    .setButtonText(SETTINGS_UI.BUTTONS.APPLY_NOW)
-                    .onClick(async () => {
-                        this.cancelPendingSaveOnly();
-                        await this.plugin.saveSettingsAndRefreshRules();
-                    }))
-            .addButton(btn =>
-                btn
-                    .setButtonText(SETTINGS_UI.BUTTONS.TEST_ALL_RULES)
-                    .setTooltip(SETTINGS_UI.TOOLTIPS.TEST_ALL_RULES)
-                    .onClick(async () => {
-                        this.cancelPendingSaveOnly();
-                        await this.plugin.saveSettingsWithoutReorganizing();
-                        const results = this.plugin.testAllRules();
-                        new TestAllRulesModal(this.app, results, this.plugin.settings.rules).open();
-                    }));
-
-        // Exclusion Patterns Section
+        // Exclusion Patterns Section - placed prominently after rules
         new Setting(containerEl)
             .setName(SETTINGS_UI.EXCLUSION_PATTERNS_NAME)
             .setDesc(SETTINGS_UI.EXCLUSION_PATTERNS_DESCRIPTION);
@@ -971,6 +1028,26 @@ export class RuleSettingTab extends PluginSettingTab {
                 }
             });
         });
+
+        // Apply Now and Test All Rules buttons at the bottom
+        new Setting(containerEl)
+            .addButton(btn =>
+                btn
+                    .setButtonText(SETTINGS_UI.BUTTONS.APPLY_NOW)
+                    .onClick(async () => {
+                        this.cancelPendingSaveOnly();
+                        await this.plugin.saveSettingsAndRefreshRules();
+                    }))
+            .addButton(btn =>
+                btn
+                    .setButtonText(SETTINGS_UI.BUTTONS.TEST_ALL_RULES)
+                    .setTooltip(SETTINGS_UI.TOOLTIPS.TEST_ALL_RULES)
+                    .onClick(async () => {
+                        this.cancelPendingSaveOnly();
+                        await this.plugin.saveSettingsWithoutReorganizing();
+                        const results = this.plugin.testAllRules();
+                        new TestAllRulesModal(this.app, results, this.plugin.settings.rules).open();
+                    }));
     }
 
     /**
@@ -1024,23 +1101,31 @@ export class RuleSettingTab extends PluginSettingTab {
             const hasValue = currentRule ? hasValidValue(currentRule) : false;
             const hasKey = currentRule ? (typeof currentRule.key === 'string' && currentRule.key.trim().length > 0) : false;
 
+            const hasDestination = currentRule ? (typeof currentRule.destination === 'string' && currentRule.destination.trim().length > 0) : false;
+
             if (error) {
                 warningEl.classList.add('vault-organizer-rule-error');
-                warningEl.classList.remove('vault-organizer-rule-warning');
+                warningEl.classList.remove('vault-organizer-rule-warning', 'vault-organizer-rule-success');
                 warningEl.textContent = SETTINGS_UI.WARNINGS.INVALID_REGEX(error.message);
                 warningEl.style.display = '';
             } else if (ruleRequiresKey && !hasKey) {
                 warningEl.classList.add('vault-organizer-rule-warning');
-                warningEl.classList.remove('vault-organizer-rule-error');
+                warningEl.classList.remove('vault-organizer-rule-error', 'vault-organizer-rule-success');
                 warningEl.textContent = SETTINGS_UI.WARNINGS.KEY_REQUIRED;
                 warningEl.style.display = '';
             } else if (ruleRequiresValue && !hasValue) {
                 warningEl.classList.add('vault-organizer-rule-warning');
-                warningEl.classList.remove('vault-organizer-rule-error');
+                warningEl.classList.remove('vault-organizer-rule-error', 'vault-organizer-rule-success');
                 warningEl.textContent = SETTINGS_UI.WARNINGS.VALUE_REQUIRED;
                 warningEl.style.display = '';
-            } else {
+            } else if (hasKey && hasDestination) {
+                // Show success indicator when rule is complete and valid
+                warningEl.classList.add('vault-organizer-rule-success');
                 warningEl.classList.remove('vault-organizer-rule-warning', 'vault-organizer-rule-error');
+                warningEl.textContent = SETTINGS_UI.SUCCESS.RULE_VALID;
+                warningEl.style.display = '';
+            } else {
+                warningEl.classList.remove('vault-organizer-rule-warning', 'vault-organizer-rule-error', 'vault-organizer-rule-success');
                 warningEl.textContent = '';
                 warningEl.style.display = 'none';
             }
