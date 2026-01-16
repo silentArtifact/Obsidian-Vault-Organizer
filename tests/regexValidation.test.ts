@@ -1,7 +1,6 @@
 import {
 	validateRegexPattern,
 	safeRegExp,
-	testRegexWithTimeout,
 	REGEX_VALIDATION_CONFIG,
 } from '../src/regexValidation';
 
@@ -263,58 +262,3 @@ describe('safeRegExp', () => {
 	});
 });
 
-describe('testRegexWithTimeout', () => {
-	it('should resolve true for matching patterns', async () => {
-		const regex = /hello/;
-		const result = await testRegexWithTimeout(regex, 'hello world');
-		expect(result).toBe(true);
-	});
-
-	it('should resolve false for non-matching patterns', async () => {
-		const regex = /goodbye/;
-		const result = await testRegexWithTimeout(regex, 'hello world');
-		expect(result).toBe(false);
-	});
-
-	it('should reset lastIndex before testing global regexes', async () => {
-		const regex = /test/g;
-		regex.lastIndex = 100; // Set to invalid position
-		const result = await testRegexWithTimeout(regex, 'test string');
-		expect(result).toBe(true);
-		// lastIndex is reset to 0 before test(), so the match succeeds
-		// After successful match, lastIndex will be at end of match (not 0)
-		// The important part is that it was reset before testing, allowing the match
-	});
-
-	it('should resolve false on timeout', async () => {
-		// Create a pattern that might take long on certain inputs
-		const regex = /^(a+)+$/;
-		const input = 'a'.repeat(30) + 'b'; // Will cause backtracking
-		const result = await testRegexWithTimeout(regex, input, 100);
-		// Should timeout and return false
-		expect(result).toBe(false);
-	}, 10000);
-
-	it('should resolve false on regex errors', async () => {
-		// Create a regex that might throw on certain edge cases
-		const regex = /test/;
-		// Mock test to throw error
-		const originalTest = regex.test;
-		regex.test = () => {
-			throw new Error('Simulated error');
-		};
-		const result = await testRegexWithTimeout(regex, 'test');
-		expect(result).toBe(false);
-		// Restore original
-		regex.test = originalTest;
-	});
-
-	it('should use custom timeout value', async () => {
-		const regex = /hello/;
-		const start = Date.now();
-		const result = await testRegexWithTimeout(regex, 'hello', 50);
-		const elapsed = Date.now() - start;
-		expect(result).toBe(true);
-		expect(elapsed).toBeLessThan(100);
-	});
-});

@@ -185,7 +185,15 @@ export default class VaultOrganizer extends Plugin {
             return;
         }
 
-        await this.saveData(this.settings);
+        // Create a copy of settings for persistence, filtering out empty exclusion patterns
+        const settingsToSave = {
+            ...this.settings,
+            excludePatterns: this.settings.excludePatterns?.filter(
+                pattern => pattern && pattern.trim().length > 0
+            ) ?? [],
+        };
+
+        await this.saveData(settingsToSave);
     }
 
     /**
@@ -257,7 +265,14 @@ export default class VaultOrganizer extends Plugin {
         } finally {
             // Always save settings and reset flag, even if operation threw an error
             this.batchOperationInProgress = false;
-            await this.saveData(this.settings);
+            // Create a copy of settings for persistence, filtering out empty exclusion patterns
+            const settingsToSave = {
+                ...this.settings,
+                excludePatterns: this.settings.excludePatterns?.filter(
+                    pattern => pattern && pattern.trim().length > 0
+                ) ?? [],
+            };
+            await this.saveData(settingsToSave);
         }
     }
 
@@ -489,7 +504,21 @@ export default class VaultOrganizer extends Plugin {
                 return newPath;
             }
 
-            // Collision occurred, add microsecond-level uniqueness
+            // Collision occurred, add random suffix and verify uniqueness
+            // Keep trying until we find a unique path (should succeed on first try in practice)
+            for (let attempt = 0; attempt < PERFORMANCE_CONFIG.MAX_UNIQUE_FILENAME_ATTEMPTS; attempt++) {
+                const randomSuffix = Math.random().toString(36).substring(2, 8);
+                const fallbackPath = `${basePath}-${timestamp}-${randomSuffix}${extension}`;
+                if (!this.app.vault.getAbstractFileByPath(fallbackPath)) {
+                    return fallbackPath;
+                }
+            }
+
+            // Extremely rare: all random suffixes collided, log and return last attempt
+            Logger.warn(
+                `Could not find unique timestamp filename after ${PERFORMANCE_CONFIG.MAX_UNIQUE_FILENAME_ATTEMPTS} attempts. ` +
+                `Using potentially conflicting path for ${basePath}${extension}`
+            );
             return `${basePath}-${timestamp}-${Math.random().toString(36).substring(2, 8)}${extension}`;
         }
 
@@ -718,18 +747,17 @@ export default class VaultOrganizer extends Plugin {
                 continue;
             }
 
-            const ruleIndex = this.rules.findIndex(rule => {
-                if (rule.enabled === false) {
-                    return false;
-                }
-                return matchFrontmatter.call(this, file, [rule], frontmatter);
-            });
+            // Use matchFrontmatter to find the first matching rule directly
+            // This is more efficient than calling it separately for each rule
+            const matchedRule = matchFrontmatter.call(this, file, this.rules, frontmatter);
 
-            if (ruleIndex === -1) {
+            if (!matchedRule) {
                 continue;
             }
 
-            const rule = this.rules[ruleIndex];
+            // Find the index of the matched rule for reporting
+            const ruleIndex = this.rules.indexOf(matchedRule);
+            const rule = matchedRule;
             const trimmedDestination = rule.destination.trim();
             if (!trimmedDestination) {
                 continue;

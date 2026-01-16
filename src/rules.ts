@@ -90,7 +90,12 @@ function testCondition(condition: RuleCondition, frontmatter: Record<string, unk
             const valueStr = String(item);
             // Clone the regex to prevent state leakage between tests
             // This is important for global and sticky flags
-            const clonedRegex = new RegExp(regex.source, regex.flags);
+            // Apply caseInsensitive flag if set and not already in flags
+            let flags = regex.flags;
+            if (condition.caseInsensitive && !flags.includes('i')) {
+                flags += 'i';
+            }
+            const clonedRegex = new RegExp(regex.source, flags);
             return clonedRegex.test(valueStr);
         });
     }

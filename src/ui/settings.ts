@@ -187,6 +187,8 @@ export class RuleSettingTab extends PluginSettingTab {
                 .setName(`${SETTINGS_UI.RULE_NAME} ${index + 1}`)
                 .setDesc(SETTINGS_UI.RULE_DESCRIPTION);
             setting.settingEl.classList.add('setting-item');
+            setting.settingEl.classList.add('vault-organizer-rule-item');
+            setting.settingEl.setAttribute('data-rule-index', String(index));
             const warningEl = document.createElement('div');
             warningEl.classList.add('vault-organizer-rule-message');
             warningEl.style.display = 'none';
@@ -272,11 +274,17 @@ export class RuleSettingTab extends PluginSettingTab {
                 const matchType = currentRule?.matchType ?? 'equals';
                 const ruleRequiresValue = requiresValue(matchType);
                 const hasValue = currentRule ? hasValidValue(currentRule) : false;
+                const hasKey = currentRule ? (typeof currentRule.key === 'string' && currentRule.key.trim().length > 0) : false;
 
                 if (error) {
                     warningEl.classList.add('vault-organizer-rule-error');
                     warningEl.classList.remove('vault-organizer-rule-warning');
                     warningEl.textContent = SETTINGS_UI.WARNINGS.INVALID_REGEX(error.message);
+                    warningEl.style.display = '';
+                } else if (!hasKey) {
+                    warningEl.classList.add('vault-organizer-rule-warning');
+                    warningEl.classList.remove('vault-organizer-rule-error');
+                    warningEl.textContent = SETTINGS_UI.WARNINGS.KEY_REQUIRED;
                     warningEl.style.display = '';
                 } else if (ruleRequiresValue && !hasValue) {
                     warningEl.classList.add('vault-organizer-rule-warning');
@@ -430,12 +438,15 @@ export class RuleSettingTab extends PluginSettingTab {
                     });
             });
 
-            // Condition operator dropdown (AND/OR)
+            // Condition operator dropdown (AND/OR) - only show when there are additional conditions
             setting.addDropdown(dropdown => {
                 dropdown.selectEl.setAttribute('aria-label', 'Condition operator');
                 dropdown.selectEl.setAttribute('title', SETTINGS_UI.TOOLTIPS.CONDITION_OPERATOR);
                 dropdown.addOption('AND', 'AND');
                 dropdown.addOption('OR', 'OR');
+                // Hide the dropdown if there are no additional conditions
+                const hasConditions = rule.conditions && rule.conditions.length > 0;
+                dropdown.selectEl.style.display = hasConditions ? '' : 'none';
                 dropdown
                     .setValue(rule.conditionOperator ?? 'AND')
                     .onChange((value: string) => {
@@ -986,24 +997,42 @@ export class RuleSettingTab extends PluginSettingTab {
         if (!containerEl) {
             return;
         }
-        const settingElements = containerEl.querySelectorAll('.setting-item');
-        settingElements.forEach((settingEl, index) => {
+        // Use the specific class and data attribute to find rule elements
+        const settingElements = containerEl.querySelectorAll('.vault-organizer-rule-item[data-rule-index]');
+        settingElements.forEach((settingEl) => {
             const warningEl = settingEl.querySelector('.vault-organizer-rule-message') as HTMLElement | null;
             if (!warningEl) {
                 return;
             }
+            // Get rule index from data attribute instead of DOM order
+            const indexStr = settingEl.getAttribute('data-rule-index');
+            if (indexStr === null) {
+                return;
+            }
+            const index = parseInt(indexStr, 10);
+            if (isNaN(index)) {
+                return;
+            }
+
             const currentRule = this.plugin.settings.rules[index];
             const isEnabled = currentRule?.enabled ?? false;
             settingEl.classList.toggle('vault-organizer-rule-disabled', !isEnabled);
             const error = this.plugin.getRuleErrorForIndex(index);
             const matchType = currentRule?.matchType ?? 'equals';
             const ruleRequiresValue = requiresValue(matchType);
+            const ruleRequiresKey = true; // All rules need a key
             const hasValue = currentRule ? hasValidValue(currentRule) : false;
+            const hasKey = currentRule ? (typeof currentRule.key === 'string' && currentRule.key.trim().length > 0) : false;
 
             if (error) {
                 warningEl.classList.add('vault-organizer-rule-error');
                 warningEl.classList.remove('vault-organizer-rule-warning');
                 warningEl.textContent = SETTINGS_UI.WARNINGS.INVALID_REGEX(error.message);
+                warningEl.style.display = '';
+            } else if (ruleRequiresKey && !hasKey) {
+                warningEl.classList.add('vault-organizer-rule-warning');
+                warningEl.classList.remove('vault-organizer-rule-error');
+                warningEl.textContent = SETTINGS_UI.WARNINGS.KEY_REQUIRED;
                 warningEl.style.display = '';
             } else if (ruleRequiresValue && !hasValue) {
                 warningEl.classList.add('vault-organizer-rule-warning');

@@ -177,43 +177,6 @@ function calculateNestingDepth(pattern: string): number {
 }
 
 /**
- * Tests a regex against an input string with a timeout to prevent ReDoS.
- * Uses a Promise with timeout to limit execution time.
- *
- * @param regex - The compiled regex to test
- * @param input - The input string to test against
- * @param timeoutMs - Maximum execution time in milliseconds (default: 1000)
- * @returns Promise resolving to true if match found, false if no match or timeout
- *
- * @example
- * const regex = /complex.*pattern/;
- * const matched = await testRegexWithTimeout(regex, userInput, 500);
- */
-export async function testRegexWithTimeout(
-	regex: RegExp,
-	input: string,
-	timeoutMs = 1000
-): Promise<boolean> {
-	return new Promise((resolve) => {
-		const timer = setTimeout(() => {
-			resolve(false); // Timeout - treat as no match
-		}, timeoutMs);
-
-		try {
-			// Reset lastIndex for global regexes to ensure clean state
-			regex.lastIndex = 0;
-			const result = regex.test(input);
-			clearTimeout(timer);
-			resolve(result);
-		} catch {
-			// Ignore errors and treat as no match
-			clearTimeout(timer);
-			resolve(false);
-		}
-	});
-}
-
-/**
  * Safely creates a RegExp with validation.
  * Returns undefined if the pattern is unsafe.
  *

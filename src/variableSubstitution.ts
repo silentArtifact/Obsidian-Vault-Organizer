@@ -64,18 +64,30 @@ function isValidVariableName(name: string): boolean {
 }
 
 /**
+ * Result of extracting variables from a template.
+ */
+export interface ExtractVariablesResult {
+    /** Valid variable names found in the template */
+    variables: string[];
+    /** Invalid variable names that were rejected (for user feedback) */
+    invalid: string[];
+}
+
+/**
  * Extracts and validates variable names from a destination path template.
  * Only returns valid variable names that pass security checks.
+ * Also returns invalid variable names for user feedback.
  *
  * @param template - Path template with {variable} syntax
- * @returns Array of validated variable names found in the template
+ * @returns Object containing valid variables and invalid variable names
  * @example
- * extractVariables("Projects/{project}/{status}") // ["project", "status"]
- * extractVariables("Bad/{../etc/passwd}") // [] (invalid variable rejected)
+ * extractVariables("Projects/{project}/{status}") // { variables: ["project", "status"], invalid: [] }
+ * extractVariables("Bad/{../etc/passwd}") // { variables: [], invalid: ["../etc/passwd"] }
  */
-export function extractVariables(template: string): string[] {
+export function extractVariables(template: string): ExtractVariablesResult {
     const regex = /\{([^}]+)\}/g;
     const variables: string[] = [];
+    const invalid: string[] = [];
     let match;
 
     while ((match = regex.exec(template)) !== null) {
@@ -84,12 +96,52 @@ export function extractVariables(template: string): string[] {
         // Validate variable name before adding
         if (isValidVariableName(varName)) {
             variables.push(varName);
+        } else {
+            // Track invalid variable names for user feedback
+            invalid.push(varName);
         }
-        // Silently skip invalid variable names
-        // They'll be caught later as "missing" variables
     }
 
-    return variables;
+    return { variables, invalid };
+}
+
+/**
+ * Gets a nested property value from an object using dot notation.
+ * Supports accessing nested properties like "author.name" from { author: { name: "John" } }.
+ *
+ * @param obj - The object to get the property from
+ * @param path - The property path (e.g., "author.name" or "simple")
+ * @returns The value at the path, or undefined if not found
+ * @example
+ * getNestedValue({ author: { name: "John" } }, "author.name") // "John"
+ * getNestedValue({ tags: ["a", "b"] }, "tags") // ["a", "b"]
+ * getNestedValue({ author: { name: "John" } }, "author.age") // undefined
+ */
+function getNestedValue(obj: Record<string, unknown> | undefined, path: string): unknown {
+    if (!obj || !path) {
+        return undefined;
+    }
+
+    // Fast path for simple (non-nested) properties
+    if (!path.includes('.')) {
+        return obj[path];
+    }
+
+    // Handle nested property access
+    const parts = path.split('.');
+    let current: unknown = obj;
+
+    for (const part of parts) {
+        if (current === null || current === undefined) {
+            return undefined;
+        }
+        if (typeof current !== 'object') {
+            return undefined;
+        }
+        current = (current as Record<string, unknown>)[part];
+    }
+
+    return current;
 }
 
 /**
@@ -151,9 +203,10 @@ export function substituteVariables(
     template: string,
     frontmatter: Record<string, unknown> | undefined
 ): SubstitutionResult {
-    const variables = extractVariables(template);
+    const extractResult = extractVariables(template);
+    const { variables, invalid } = extractResult;
 
-    if (variables.length === 0) {
+    if (variables.length === 0 && invalid.length === 0) {
         return {
             substitutedPath: template,
             substituted: [],
@@ -168,7 +221,9 @@ export function substituteVariables(
     let result = template;
 
     for (const variable of variables) {
-        const value = frontmatter?.[variable];
+        // Use getNestedValue to support dot notation for nested properties
+        // e.g., "author.name" accesses frontmatter.author.name
+        const value = getNestedValue(frontmatter, variable);
         // Pre-compile regex for this variable to avoid recreation
         const variableRegex = new RegExp(`\\{${escapeRegex(variable)}\\}`, 'g');
 
@@ -207,8 +262,9 @@ export function substituteVariables(
         substitutedPath: result,
         substituted,
         missing,
-        hasVariables: true,
+        hasVariables: variables.length > 0 || invalid.length > 0,
         truncated: truncated.length > 0 ? truncated : undefined,
+        invalid: invalid.length > 0 ? invalid : undefined,
     };
 }
 
@@ -243,8 +299,15 @@ export function validateAndSubstituteDestination(
     const frontmatter = cache?.frontmatter;
     const substitutionResult = substituteVariables(template, frontmatter);
 
-    // If variables were missing, add a warning
+    // Collect warnings
     const warnings: string[] = [];
+
+    // Warn about invalid variable names (e.g., path traversal attempts)
+    if (substitutionResult.invalid && substitutionResult.invalid.length > 0) {
+        warnings.push(`Invalid variable names (ignored): ${substitutionResult.invalid.join(', ')}`);
+    }
+
+    // Warn about missing frontmatter variables
     if (substitutionResult.missing.length > 0) {
         warnings.push(`Missing frontmatter variables: ${substitutionResult.missing.join(', ')}`);
     }

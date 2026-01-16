@@ -529,6 +529,13 @@ describe('settings UI', () => {
   it('keeps non-error warnings styled as warnings', async () => {
     await fireEvent.click(screen.getByText('Add Rule'));
     await flushPromises();
+
+    // First add a key so we don't get the "key required" warning
+    const keyInput = await screen.findByPlaceholderText('key') as HTMLInputElement;
+    await fireEvent.input(keyInput, { target: { value: 'status' } });
+    await jest.runOnlyPendingTimersAsync();
+    await flushPromises();
+
     const matchTypeSelect = screen.getByLabelText('Match type') as HTMLSelectElement;
     await fireEvent.change(matchTypeSelect, { target: { value: 'contains' } });
     await flushPromises();
@@ -985,8 +992,14 @@ describe('settings UI', () => {
       await fireEvent.click(addButton);
       await flushPromises();
 
+      // After clicking Add Pattern, the in-memory settings should have an empty pattern
+      // The UI re-renders with this pattern, showing an input field
       expect(plugin.settings.excludePatterns.length).toBe(1);
       expect(plugin.settings.excludePatterns[0]).toBe('');
+
+      // And the UI should show an input field for entering the new pattern
+      const patternInputs = screen.queryAllByPlaceholderText(/e\.g\., Templates/);
+      expect(patternInputs.length).toBe(1);
     });
 
     it('allows editing exclusion patterns', async () => {
