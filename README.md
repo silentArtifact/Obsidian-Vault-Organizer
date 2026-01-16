@@ -1,108 +1,244 @@
 # Vault Organizer
 
-Vault Organizer is an Obsidian plugin that watches the frontmatter of your Markdown notes and automatically files them into folders that match rules you define.
+**Automatically organize your Obsidian notes into folders based on frontmatter rules.**
 
-## Frontmatter rules at a glance
+Vault Organizer watches your notes and moves them to the right folders based on rules you define. Set `status: done` and your note moves to `Archive/`. Add `project: Website` and it goes to `Projects/Website/`. Simple as that.
 
-Each rule targets frontmatter properties and determines what to do when the note contains matching values:
+---
 
-- **Key** – the name of the frontmatter property to inspect (for example `status`, `tags`, or `type`).
-- **Value** – either a literal string that must match exactly or a regular expression (enable **Regex** to switch modes). Frontmatter arrays are supported; the rule matches if *any* element satisfies the value check.
-- **Destination** – the folder path (relative to the vault root) where matching notes should live. **Supports variable substitution** with `{variable}` syntax (e.g., `Projects/{project_name}`) to dynamically create folders based on frontmatter values. Missing folders are created on demand when the rule runs.
-- **Match Type** – choose how to match the value: Equals (exact match), Contains (substring), Starts with, Ends with, or Regex (regular expression).
-- **Conflict Resolution** – what to do when a file already exists at the destination:
-  - **Fail** (default) – show an error and don't move the file
-  - **Skip** – silently skip the move
-  - **Add number** – append -1, -2, etc. to create a unique filename
-  - **Add timestamp** – append a timestamp to create a unique filename
-- **Active** – rules start disabled so you can finish configuring them safely. Flip the toggle to enable a rule once it's ready to run.
-- **Debug** – when enabled the plugin only reports where the note *would* move and leaves it in place, which is useful when testing a new rule.
+## Table of Contents
 
-Rules are evaluated in the order they appear in the settings tab; the first matching rule wins. Notes without matching rules are left untouched.
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Creating Rules](#creating-rules)
+- [Rule Options Reference](#rule-options-reference)
+- [Variable Substitution](#variable-substitution)
+- [Move History & Undo](#move-history--undo)
+- [Example Setups](#example-setups)
+- [Advanced Features](#advanced-features)
+- [Troubleshooting](#troubleshooting)
+- [Building from Source](#building-from-source)
 
-### Adding and editing rules
+---
 
-1. Open **Settings → Community Plugins → Vault Organizer**.
-2. Use **Add Rule** to create a new entry or edit the inputs beside an existing rule.
-3. Fill in the key, value, and destination. Toggle **Regex** if the value should be treated as a regular expression and supply flags such as `i` for case-insensitive matching.
-4. When you are satisfied, flip **Activate this rule** on to begin moving notes. Leave it off while drafting so the rule cannot run prematurely.
-5. Toggle **Debug** while experimenting so you can confirm moves without reorganizing files immediately.
-6. Press **Apply now** (or toggle Regex/Activate/Debug) to save changes and immediately re-run the rules across your vault. Otherwise, updates are saved automatically after a short pause.
+## Quick Start
 
-You can also run the **Reorganize notes based on frontmatter rules** command from the command palette to apply the current rules on demand.
+**Get organized in 3 steps:**
 
-### Automatic moves
+1. **Open Settings** → Community Plugins → Vault Organizer
+2. **Create a rule:**
+   - Key: `status`
+   - Value: `done`
+   - Destination: `Archive`
+3. **Activate the rule** → Notes with `status: done` now auto-file to `Archive/`
 
-Vault Organizer listens for vault changes and applies the rules when:
+That's it. The plugin handles the rest automatically.
 
-- A Markdown file is created.
-- A Markdown file is modified.
-- A Markdown file is renamed or moved.
-- Obsidian finishes reading updated frontmatter metadata for a Markdown file.
+---
 
-If a matching rule has a non-empty destination and Debug is off, the plugin moves the note into that folder. When Debug is on, a notice appears instead (e.g., `DEBUG: NoteTitle would be moved to Vault/Projects/In Progress`).
+## Installation
 
-### Move history and undo
+### From Obsidian Community Plugins (Recommended)
 
-Vault Organizer tracks the history of automatic moves to provide a safety net for your file organization:
+1. Open **Settings** → **Community Plugins**
+2. Click **Browse** and search for "Vault Organizer"
+3. Click **Install**, then **Enable**
 
-- **Automatic tracking** – Every time the plugin successfully moves a note, it records the move (timestamp, original path, new path, and which rule triggered it).
-- **Move history** – By default, the last 50 moves are kept. Use the **View move history** command from the command palette to see all tracked moves in chronological order with the most recent at the top.
-- **Undo last move** – If the plugin moved a note to the wrong location, run **Undo last automatic move** from the command palette. This command:
-  - Moves the file back to its original location
-  - Creates any necessary folders automatically
-  - Removes the move from the history
-  - Shows an error if the file no longer exists or if another file already occupies the original location
-- **Clear history** – The move history modal includes a **Clear History** button to remove all tracked moves if needed.
+### Manual Installation
 
-**Important notes:**
-- Only automatic moves triggered by rules are tracked. Manual file moves you perform in Obsidian are not recorded.
-- The undo command only works for the most recent move in the history. You cannot undo older moves directly, but you can view them in the history modal.
-- If a file has been moved multiple times, undoing will only reverse the last move, not all previous moves.
-- Move history is stored in the plugin's data file and persists across Obsidian sessions.
+1. Download the latest release from GitHub
+2. Extract to `YourVault/.obsidian/plugins/vault-organizer/`
+3. Reload Obsidian
+4. Enable the plugin in **Settings** → **Community Plugins**
 
-## Building and installing from source
+---
 
-1. Install dependencies with `npm install`.
-2. Build the production bundle with `npm run build`. This compiles `main.ts` into `main.js` using esbuild.
-3. Copy `main.js`, `manifest.json`, and `styles.css` into your vault at `Vault/.obsidian/plugins/obsidian-vault-organizer/` (create the folder if needed).
-4. Reload Obsidian and enable the plugin from the Community Plugins settings panel.
+## Creating Rules
 
-For development, `npm run dev` keeps the build running in watch mode while you edit TypeScript sources.
+### Step-by-Step
+
+1. Go to **Settings** → **Community Plugins** → **Vault Organizer**
+2. Click **Add Rule**
+3. Configure the rule:
+
+| Field | What to Enter |
+|-------|---------------|
+| **Key** | The frontmatter property to check (e.g., `status`, `tags`, `type`) |
+| **Value** | What to match (e.g., `done`, `meeting`, `journal`) |
+| **Destination** | Target folder path (e.g., `Archive`, `Projects/Active`) |
+
+4. Toggle **Debug** ON to test (shows where files *would* move without moving them)
+5. Once satisfied, toggle **Active** ON to enable auto-moving
+6. Click **Apply now** to process existing notes
+
+### How Matching Works
+
+Rules run automatically when you:
+- Create a new note
+- Edit a note's frontmatter
+- Rename or move a note
+
+The **first matching rule wins**—order your rules from most specific to least specific.
+
+---
+
+## Rule Options Reference
+
+| Option | Description |
+|--------|-------------|
+| **Key** | Frontmatter property name to inspect |
+| **Value** | String to match (or regex pattern if Regex is enabled) |
+| **Destination** | Folder path relative to vault root. Supports `{variables}` |
+| **Match Type** | How to compare: Equals, Contains, Starts with, Ends with, or Regex |
+| **Regex** | Enable to treat Value as a regular expression |
+| **Conflict Resolution** | What to do if a file already exists at destination |
+| **Active** | Toggle ON to enable the rule (starts OFF for safe setup) |
+| **Debug** | Toggle ON to preview moves without actually moving files |
+
+### Match Types
+
+| Type | Matches When... |
+|------|-----------------|
+| **Equals** | Value exactly matches frontmatter value |
+| **Contains** | Value appears anywhere in frontmatter value |
+| **Starts with** | Frontmatter value begins with Value |
+| **Ends with** | Frontmatter value ends with Value |
+| **Regex** | Value (as regex) matches frontmatter value |
+
+### Conflict Resolution Options
+
+| Option | Behavior |
+|--------|----------|
+| **Fail** (default) | Show error, don't move |
+| **Skip** | Silently skip the move |
+| **Add number** | Append -1, -2, etc. to filename |
+| **Add timestamp** | Append timestamp to filename |
+
+---
+
+## Variable Substitution
+
+Make destinations dynamic using `{frontmatter_key}` syntax.
+
+### Basic Example
+
+**Frontmatter:**
+```yaml
+---
+project: Website Redesign
+status: active
+---
+```
+
+**Rule:** Key: `status` → Value: `active` → Destination: `Projects/{project}`
+
+**Result:** Note moves to `Projects/Website Redesign/`
+
+### More Examples
+
+| Destination Pattern | Result |
+|--------------------|--------|
+| `Projects/{project}` | `Projects/Website Redesign/` |
+| `Archive/{year}/{month}` | `Archive/2024/January/` |
+| `{department}/{team}/{project}` | `Engineering/Frontend/Dashboard/` |
+
+### How Variables Work
+
+- Variables pull values from the note's frontmatter
+- Missing variables become empty strings (path cleaned automatically)
+- Invalid path characters are sanitized
+- Array values are joined with commas
+
+---
+
+## Move History & Undo
+
+The plugin tracks every automatic move so you can undo mistakes.
+
+### Commands
+
+| Command | What It Does |
+|---------|--------------|
+| **View move history** | Shows all tracked moves (most recent first) |
+| **Undo last automatic move** | Moves the file back to its original location |
+| **Reorganize notes based on frontmatter rules** | Manually trigger rule processing |
+
+### Important Notes
+
+- Only automatic moves are tracked (not your manual file moves in Obsidian)
+- Undo only works for the most recent move
+- History persists across Obsidian sessions (stored in plugin data)
+- Default: last 50 moves tracked
+- Use **Clear History** button in the history modal to reset
+
+---
+
+## Example Setups
+
+### Status-Based Workflow
+
+Move notes through a pipeline based on status:
+
+| Rule | Key | Value | Destination |
+|------|-----|-------|-------------|
+| 1 | `status` | `in-progress` | `Projects/Active` |
+| 2 | `status` | `done` | `Projects/Archive` |
+| 3 | `status` | `someday` | `Projects/Backlog` |
+
+### Project Organization
+
+Automatically sort into project folders:
+
+| Rule | Key | Value | Destination |
+|------|-----|-------|-------------|
+| 1 | `project` | (any - use Contains with empty value) | `Projects/{project}` |
+
+### Date-Based Archiving
+
+Archive completed items by date:
+
+| Rule | Key | Value | Destination |
+|------|-----|-------|-------------|
+| 1 | `status` | `done` | `Archive/{year}/{month}` |
+
+### Tag Routing
+
+Collect meeting notes (using regex to match tags starting with "meeting"):
+
+| Rule | Key | Value | Match Type | Destination |
+|------|-----|-------|------------|-------------|
+| 1 | `tags` | `^meeting` | Regex (case-insensitive) | `Meetings` |
+
+### Content Type Folders
+
+Organize by note type:
+
+| Rule | Key | Value | Destination |
+|------|-----|-------|-------------|
+| 1 | `type` | `journal` | `Journal` |
+| 2 | `type` | `reference` | `Reference` |
+| 3 | `type` | `daily` | `Daily Notes` |
+
+### Conflict Handling for Daily Notes
+
+Prevent overwrites with numbered duplicates:
+
+| Rule | Key | Value | Destination | Conflict Resolution |
+|------|-----|-------|-------------|---------------------|
+| 1 | `type` | `daily` | `Daily/{year}` | Add number |
+
+---
 
 ## Advanced Features
 
-### Variable Substitution
-
-Destinations can include variables from the note's frontmatter using `{variable}` syntax. This allows you to create dynamic folder structures based on note metadata.
-
-**Examples:**
-- `Projects/{project_name}` – organize by project name from frontmatter
-- `Archive/{year}/{month}` – organize by year and month
-- `Team/{department}/{project}` – multi-level organization
-
-**How it works:**
-- Variables are replaced with their frontmatter values when the rule runs
-- Missing variables are replaced with empty strings (folders are cleaned up automatically)
-- Invalid path characters are automatically sanitized
-- Array values are joined with commas
-
-**Example frontmatter and result:**
-```yaml
----
-project_name: Website Redesign
-year: 2024
----
-```
-With destination `Projects/{project_name}`, the note moves to `Projects/Website Redesign/`.
-
 ### Exclusion Patterns
 
-Prevent automatic file organization for specific files or folders using glob patterns.
+Prevent specific files/folders from being organized.
 
-**Note:** Exclusion patterns are fully supported in the backend but currently require manual configuration. To set up exclusion patterns, edit the plugin's `data.json` file and add patterns to the `excludePatterns` array. A UI for managing exclusion patterns will be added in a future update.
+> **Note:** Currently requires manual JSON editing. UI coming in a future update.
 
-**Configuration example (in data.json):**
+Edit `data.json` in the plugin folder:
+
 ```json
 {
   "excludePatterns": [
@@ -115,28 +251,31 @@ Prevent automatic file organization for specific files or folders using glob pat
 ```
 
 **Pattern syntax:**
-- `*` – matches any characters except /
-- `**` – matches any characters including / (for recursive matching)
-- `?` – matches a single character
-- `[abc]` – matches any character in the set
 
-**Examples:**
-- `Templates/**` – exclude everything in Templates folder
-- `*.excalidraw` – exclude all Excalidraw drawings
-- `Archive/**` – exclude archived files
-- `Daily Notes/*` – exclude files directly in Daily Notes (but not subfolders)
+| Pattern | Matches |
+|---------|---------|
+| `*` | Any characters except `/` |
+| `**` | Any characters including `/` (recursive) |
+| `?` | Single character |
+| `[abc]` | Any character in set |
 
-Files matching any exclusion pattern will not be automatically organized, even if they match a rule.
+**Common patterns:**
 
-### Multi-Condition Rules (Advanced)
+| Pattern | Effect |
+|---------|--------|
+| `Templates/**` | Exclude entire Templates folder |
+| `*.excalidraw` | Exclude Excalidraw files |
+| `Archive/**` | Exclude archived files |
+| `Daily Notes/*` | Exclude direct children of Daily Notes |
 
-**Note:** Multi-condition support is available in the rule data structure but requires manual JSON editing of the plugin's data file. A full UI for this feature is planned for a future update.
+### Multi-Condition Rules
 
-Rules can have multiple conditions combined with AND or OR logic:
-- **AND** – all conditions must match (more restrictive)
-- **OR** – at least one condition must match (more permissive)
+Combine conditions with AND/OR logic.
 
-**Example JSON configuration:**
+> **Note:** Currently requires manual JSON editing. UI coming in a future update.
+
+**Example:** Move to Archive only when status is "done" AND priority is "low":
+
 ```json
 {
   "key": "status",
@@ -154,28 +293,76 @@ Rules can have multiple conditions combined with AND or OR logic:
   ]
 }
 ```
-This rule moves notes to Archive only when status is "done" AND priority is "low".
 
-## Example rule setups
+---
 
-- **Status-based pipeline** – `status = "in-progress"` → `Projects/In Progress`, `status = "done"` → `Projects/Archive`.
-- **Dynamic project folders** – `status = "active"` → `Projects/{project_name}` to organize each project separately.
-- **Date-based archiving** – `status = "done"` → `Archive/{year}/{month}` for chronological organization.
-- **Tag routing** – Regex rule with `key = "tags"`, `value = "^meeting"`, `flags = "i"`, `destination = "Meetings"` to collect all notes whose tags start with `meeting`.
-- **Type folders** – `type = "journal"` → `Journal`, `type = "reference"` → `Reference`.
-- **Area and projects** – Regex on `area` such as `^(home|family)$` → `Areas/Personal`, while a simple rule `area = "work"` → `Areas/Work`.
-- **Conflict handling** – Use "Add number" conflict resolution for daily notes to prevent overwrites: `type = "daily"` → `Daily/{year}` with conflict resolution set to "Add number".
+## Troubleshooting
 
-Feel free to stack these rules; only the first rule that matches a note will move it.
+### Nothing happens when I edit a note
 
-## Troubleshooting and limitations
+- [ ] Is the rule **Active**? (toggle must be ON)
+- [ ] Is **Debug** mode ON? (shows preview instead of moving)
+- [ ] Does your note have the frontmatter key the rule checks?
+- [ ] Is the frontmatter valid YAML (between `---` delimiters)?
+- [ ] Is the destination path set and non-empty?
 
-- **Invalid regular expressions** – When a regex cannot be parsed the rule is skipped, a warning appears in the settings UI, and a notice is logged to the developer console. Edit the pattern or flags, then click **Apply now**.
-- **Destination is required** – Rules with an empty destination never move notes. Confirm the path is set and spelled correctly.
-- **Only Markdown files are processed** – Other file types are ignored, even if they contain frontmatter-like text.
-- **One rule per note** – The plugin stops at the first matching rule. Order rules carefully if multiple destinations could apply.
-- **Frontmatter must exist** – Notes without the configured key are ignored. Double-check the frontmatter key spelling and that it is located above the `---` delimiter.
-- **Unexpected folder structure** – Remember that destinations are relative to the vault root. Use Debug mode first if you are unsure where a rule will move a note.
-- **Move conflicts** – If Obsidian cannot move a note (for example, when another file already exists at the destination), a notice such as `Failed to move "Note Title" to "Projects/Note Title.md": EEXIST: file already exists` appears so you know which file was affected and why.
+### Note moved to wrong location
 
-If something still looks wrong, enable Debug on the suspect rule to view the notices generated during future edits, and verify the values stored in the note’s frontmatter.
+1. Run **Undo last automatic move** from command palette
+2. Check rule order (first match wins)
+3. Enable **Debug** on suspect rules to preview behavior
+4. Verify frontmatter spelling matches rule key exactly
+
+### "File already exists" error
+
+The destination already has a file with that name. Options:
+- Change **Conflict Resolution** to "Add number" or "Add timestamp"
+- Rename your note
+- Delete/move the conflicting file
+
+### Regex not working
+
+- Check the pattern is valid (errors show in settings UI and dev console)
+- For case-insensitive matching, add `i` flag
+- Remember: `^` = start, `$` = end, `.` = any char, `.*` = any chars
+
+### Files not in expected folder
+
+- Destinations are **relative to vault root**
+- Use Debug mode to see exact destination paths
+- Check for typos in destination path
+- Verify variable names match frontmatter keys exactly
+
+### Only Markdown files are processed
+
+By design. Other file types (images, PDFs, etc.) are ignored even if they contain frontmatter-like text.
+
+---
+
+## Building from Source
+
+```bash
+# Install dependencies
+npm install
+
+# Build for production
+npm run build
+
+# Build in watch mode (for development)
+npm run dev
+```
+
+**Install the build:**
+
+Copy these files to `YourVault/.obsidian/plugins/vault-organizer/`:
+- `main.js`
+- `manifest.json`
+- `styles.css`
+
+Then reload Obsidian and enable the plugin.
+
+---
+
+## License
+
+See [LICENSE](LICENSE) file.
