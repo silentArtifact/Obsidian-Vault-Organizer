@@ -6,6 +6,14 @@
 import { Logger } from './logger';
 
 /**
+ * Built-in exclusion patterns that are always applied and cannot be removed by users.
+ * These protect critical Obsidian files from being moved by the plugin.
+ */
+export const BUILT_IN_PATTERNS: readonly string[] = [
+    '.obsidian/**',
+] as const;
+
+/**
  * Maximum number of compiled regex patterns to cache.
  * Prevents unbounded memory growth in long-running sessions with dynamic patterns.
  * Made configurable to support users with many exclusion patterns.
@@ -221,4 +229,15 @@ export function validateExclusionPattern(pattern: string): { valid: boolean; err
     } catch {
         return { valid: false, error: 'Invalid glob pattern syntax' };
     }
+}
+
+/**
+ * Combines built-in patterns with user-defined patterns.
+ * Built-in patterns are always included first and cannot be removed.
+ *
+ * @param userPatterns - User-defined exclusion patterns from settings (can be undefined or empty)
+ * @returns Combined array of all exclusion patterns
+ */
+export function getAllExclusionPatterns(userPatterns?: string[]): string[] {
+    return [...BUILT_IN_PATTERNS, ...(userPatterns ?? [])];
 }

@@ -288,3 +288,59 @@ body.is-phone .vault-organizer-rule-success {
   color: var(--text-normal);
   margin-right: var(--size-2-1);
 }
+
+/* Built-in patterns styling (immutable patterns) */
+.vault-organizer-builtin-patterns {
+  margin-top: var(--size-4-2);
+  margin-bottom: var(--size-4-4);
+  padding: var(--size-4-3);
+  background-color: var(--background-secondary);
+  border-radius: var(--radius-m);
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--interactive-accent);
+}
+
+.vault-organizer-builtin-heading {
+  font-size: 0.9em;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: var(--size-2-2);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.vault-organizer-builtin-item {
+  display: flex;
+  align-items: center;
+  padding: var(--size-2-2) var(--size-4-2);
+  background-color: var(--background-primary);
+  border-radius: var(--radius-s);
+  border: 1px solid var(--background-modifier-border);
+  margin-bottom: var(--size-2-1);
+}
+
+.vault-organizer-builtin-item:last-child {
+  margin-bottom: 0;
+}
+
+.vault-organizer-builtin-pattern {
+  font-family: var(--font-monospace);
+  font-weight: 600;
+  color: var(--text-accent);
+  flex: 1;
+}
+
+.vault-organizer-builtin-lock {
+  font-size: 0.9em;
+  margin-left: var(--size-4-2);
+  opacity: 0.7;
+}
+
+/* Mobile responsive styling for built-in patterns */
+body.is-phone .vault-organizer-builtin-patterns {
+  padding: var(--size-2-2);
+}
+
+body.is-phone .vault-organizer-builtin-item {
+  padding: var(--size-2-1);
+}
