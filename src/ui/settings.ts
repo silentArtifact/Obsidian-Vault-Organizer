@@ -7,7 +7,7 @@ import { MATCH_TYPE_OPTIONS, normalizeSerializedRule } from '../types';
 import { RuleTagPickerModal, RuleFrontmatterKeyPickerModal, TestAllRulesModal } from './modals';
 import { SETTINGS_UI } from '../constants';
 import { DEBOUNCE_CONFIG } from '../config';
-import { validateExclusionPattern } from '../exclusionPatterns';
+import { validateExclusionPattern, BUILT_IN_PATTERNS } from '../exclusionPatterns';
 import { extractVariables } from '../variableSubstitution';
 
 /**
@@ -901,6 +901,35 @@ export class RuleSettingTab extends PluginSettingTab {
             .setName(SETTINGS_UI.EXCLUSION_PATTERNS_NAME)
             .setDesc(SETTINGS_UI.EXCLUSION_PATTERNS_DESCRIPTION);
 
+        // Display built-in patterns (read-only)
+        if (BUILT_IN_PATTERNS.length > 0) {
+            const builtInContainer = document.createElement('div');
+            builtInContainer.className = 'vault-organizer-builtin-patterns';
+            containerEl.appendChild(builtInContainer);
+
+            const builtInHeading = document.createElement('div');
+            builtInHeading.className = 'vault-organizer-builtin-heading';
+            builtInHeading.textContent = 'Built-in Patterns (always active)';
+            builtInContainer.appendChild(builtInHeading);
+
+            BUILT_IN_PATTERNS.forEach((pattern) => {
+                const patternItem = document.createElement('div');
+                patternItem.className = 'vault-organizer-builtin-item';
+                builtInContainer.appendChild(patternItem);
+
+                const patternText = document.createElement('span');
+                patternText.className = 'vault-organizer-builtin-pattern';
+                patternText.textContent = pattern;
+                patternItem.appendChild(patternText);
+
+                const lockIcon = document.createElement('span');
+                lockIcon.className = 'vault-organizer-builtin-lock';
+                lockIcon.textContent = '🔒';
+                lockIcon.setAttribute('aria-label', 'This pattern cannot be removed');
+                patternItem.appendChild(lockIcon);
+            });
+        }
+
         // Display existing exclusion patterns
         this.plugin.settings.excludePatterns.forEach((pattern, index) => {
             new Setting(containerEl)
@@ -979,7 +1008,6 @@ export class RuleSettingTab extends PluginSettingTab {
             { pattern: 'Templates/**', description: 'Exclude all files in Templates folder' },
             { pattern: '*.excalidraw.md', description: 'Exclude Excalidraw drawings' },
             { pattern: 'Archive/**', description: 'Exclude all files in Archive folder' },
-            { pattern: '.obsidian/**', description: 'Exclude Obsidian config files' },
             { pattern: '**/Daily Notes/**', description: 'Exclude Daily Notes in any location' },
         ];
 

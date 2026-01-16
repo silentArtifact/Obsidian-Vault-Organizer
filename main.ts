@@ -30,7 +30,7 @@ import {
 import { RuleSettingTab } from './src/ui/settings';
 import { MoveHistoryModal } from './src/ui/modals';
 import { COMMANDS, NOTICES, WARNINGS, LOG_MESSAGES } from './src/constants';
-import { isExcluded } from './src/exclusionPatterns';
+import { isExcluded, getAllExclusionPatterns } from './src/exclusionPatterns';
 import { Logger } from './src/logger';
 import { PERFORMANCE_CONFIG } from './src/config';
 import { validateAndPrepareDestination } from './src/pathValidationHelper';
@@ -570,8 +570,8 @@ export default class VaultOrganizer extends Plugin {
         let intendedDestination: string | undefined;
         let finalPath: string | undefined; // Track final path if file is renamed
         try {
-            // Check if file is excluded
-            if (isExcluded(file.path, this.settings.excludePatterns)) {
+            // Check if file is excluded (includes built-in patterns like .obsidian/**)
+            if (isExcluded(file.path, getAllExclusionPatterns(this.settings.excludePatterns))) {
                 return;
             }
 
@@ -736,8 +736,8 @@ export default class VaultOrganizer extends Plugin {
         const results: RuleTestResult[] = [];
 
         for (const file of markdownFiles) {
-            // Skip excluded files
-            if (isExcluded(file.path, this.settings.excludePatterns)) {
+            // Skip excluded files (includes built-in patterns like .obsidian/**)
+            if (isExcluded(file.path, getAllExclusionPatterns(this.settings.excludePatterns))) {
                 continue;
             }
 
